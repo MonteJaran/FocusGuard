@@ -1,0 +1,30 @@
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Local agent / editor state
+.claude/
+.vscode/
+.idea/
+
+# Local data & secrets
+*.db
+*.sqlite
+*.log
+.env
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Build output
+build/
+dist/
+*.spec
+
+# Test & tooling caches
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/

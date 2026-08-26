@@ -17,6 +17,24 @@ the Windows session.
 
 ---
 
+## Progress
+
+| ID | Status | What changed |
+|---|---|---|
+| BL-01 | **Fixed** | `_SAMPLE_ADS` deleted. `_ADS` is empty and the banner does not render without ads. Regression test blocks third-party brands returning to any promotional string |
+| BL-02 | **Fixed** | Plan lists cut to shipped features; everything unbuilt moved to `_PLANNED_FEATURES`, rendered greyed out under "Planned" with a "not included in any purchase" note. The Insights teasers no longer show invented statistics as detected findings. Full intent preserved in `ROADMAP.md`. Regression tests block both from returning |
+| BL-03 | *Partial* | `PRIVACY.md` written and a first-run consent gate added (`core/consent.py`) — the monitor cannot start until the user accepts, and consent is versioned so a policy change re-prompts. **Still needed:** legal review, terms of service and EULA, a contact address, per-registration consent for the email field, and the server source in version control |
+| ST-04 | *Partial* | pytest suite (65 tests), ruff, `pyproject.toml`, and a GitHub Actions workflow across Linux + Windows on Python 3.10 and 3.12. **Still needed:** monitor tests behind a psutil fake, and making the project an installable package instead of `sys.path.insert` |
+| ST-07 | *Partial* | Source extracted from `Software.zip` into the repo; `.claude/` and `__pycache__` untracked and gitignored. **Still needed:** stop shipping `debug.bat` / `debug_processes.py`, and give the version string a single source of truth |
+
+**Found while fixing the above** — three network error paths in
+`ui/devices_page.py` referenced `exc` inside a lambda scheduled with
+`after()`. Python deletes that binding when the `except` block exits, so every
+registration or device-link failure raised `NameError` instead of showing the
+error. Fixed by binding the value into the lambda's default argument.
+
+---
+
 ## Section A — Legal exposure
 
 ### BL-01 · CRITICAL · Unauthorized ads for Notion, GitHub and Endel
