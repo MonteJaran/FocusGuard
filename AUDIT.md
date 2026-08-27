@@ -43,7 +43,15 @@ the Windows session.
 | ST-01 | **Fixed** | `FocusGuard.bat` builds a `.venv` and installs there instead of into the user's global Python, so it can no longer break their other projects. The auto-download of a Python installer is gone entirely. `packaging/focusguard.spec` gives a frozen build with no runtime pip at all |
 | ST-02 | *Partial* | `packaging/installer.iss` — per-user Inno Setup installer, stops a running instance before installing, removes the `Run` key on uninstall and offers to delete `%LOCALAPPDATA%\FocusGuard`. `packaging/build.ps1` runs tests and lint, generates the Windows version resource from `core/version.py`, builds, **smoke-tests that the frozen app stays running**, and signs with timestamping when a certificate is supplied. **Still needed:** an actual certificate, a first real Windows build, and an update mechanism |
 | ST-03 | **Fixed** | All three antivirus triggers removed from the launcher: no global pip, no downloading and executing an unverified `.exe`, no `-ExecutionPolicy Bypass`. Build is one-folder rather than one-file (one-file unpacks to `%TEMP%` on every launch) and UPX is off. Tests fail the build if any of them return |
+| SF-11 | **Fixed** | Indices were added earlier; retention now closes the other half. `retention_days` defaults to 365 (0 keeps everything), pruned on the daily rollover rather than at startup so launch stays fast, and exposed in Settings — `PRIVACY.md` says the user can change it there, so a test asserts the control exists |
 | SF-14 | **Fixed** | Kill watcher is now joined on `stop()`; `_notified_limits` resets on date rollover so warnings resume after day one; the `sound` parameter that was accepted and ignored is gone, and the sound setting now actually plays |
+
+**New since the audit** — `core/updates.py` adds an update check, which the
+original review flagged as missing entirely: without one, a security fix can
+never reach anyone who has already installed. It reads a static JSON manifest
+(hostable free, no backend), compares versions numerically rather than as
+strings, refuses a non-https download URL because the manifest is untrusted
+network input, and never downloads or installs anything itself.
 
 **Found while fixing the above** — three network error paths in
 `ui/devices_page.py` referenced `exc` inside a lambda scheduled with

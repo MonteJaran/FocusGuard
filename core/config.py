@@ -26,6 +26,13 @@ DEFAULT_CONFIG: dict = {
     "count_foreground_only": True,
     # Stop counting after this long with no keyboard or mouse input.
     "idle_threshold_sec": 300,
+    # Check for a newer version at startup. This is a network request, so it
+    # is disclosed in PRIVACY.md and can be turned off.
+    "check_for_updates": True,
+    # Delete usage history older than this many days. 0 keeps everything.
+    # A year is far more than any view in the app shows, and it keeps the
+    # database from growing for as long as FocusGuard stays installed.
+    "retention_days": 365,
     "first_run": True,
     # Privacy consent (see core/consent.py). 0 = never accepted; the app shows
     # the consent gate and records nothing until this matches CONSENT_VERSION.

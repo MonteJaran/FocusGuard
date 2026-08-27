@@ -53,6 +53,7 @@ _FREE_FEATURES = [
     "Usage insights: peak hours, categories, top apps",
     "CSV export",
     "All data stored locally on your PC",
+    "Automatic cleanup of old history",
 ]
 
 # Shipping today, but only for Premium. Keep this empty until a paid tier
@@ -64,7 +65,6 @@ _PREMIUM_FEATURES: list = []
 # it works end to end in the shipped build.
 _PLANNED_FEATURES = [
     "Cross-device sync",
-    "Configurable data retention",
     "Pattern recognition across your history",
     "Predictive distraction alerts",
     "PDF / Excel report export",

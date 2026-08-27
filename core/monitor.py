@@ -514,6 +514,34 @@ class Monitor:
                 total += max(0, session["counted_sec"] - session["written_sec"])
         return int(total)
 
+    def _apply_retention(self) -> int:
+        """
+        Drop usage history past the retention window. Returns rows deleted.
+
+        Runs on the daily rollover rather than at startup: pruning a large
+        table is exactly the kind of work that makes an app feel slow to open,
+        and a day either way does not matter for a retention policy.
+        """
+        try:
+            days = int(self.config.get("retention_days", 0) or 0)
+        except (TypeError, ValueError):
+            log.warning("retention_days is not a number; keeping all history.")
+            return 0
+
+        if days <= 0:
+            return 0
+
+        try:
+            removed = self.db.prune_sessions_older_than(days)
+        except Exception as e:
+            log.error("Could not apply the retention policy: %s", e)
+            return 0
+
+        if removed:
+            log.info("Retention: removed %d session(s) older than %d days.",
+                     removed, days)
+        return removed
+
     def _grace_seconds(self) -> int:
         """Warning period before an over-limit app is closed."""
         try:
@@ -602,12 +630,19 @@ class Monitor:
         the user stops receiving warnings entirely after day one.
         """
         today = datetime.now().date()
+        rolled_over = False
         with self._lock:
             if today != self._notified_day:
                 self._notified_day = today
                 self._notified_limits.clear()
                 self._close_deadlines.clear()
+                rolled_over = True
                 self._log(f"Date rolled over to {today} — daily state reset.")
+
+        if rolled_over:
+            # Once a day is often enough, and it keeps the work off startup so
+            # launch stays fast.
+            self._apply_retention()
 
     def _is_over_daily_limit(self, app_id: int, app: dict) -> bool:
         """Return True if the app has already used up its daily limit."""

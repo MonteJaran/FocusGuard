@@ -517,6 +517,46 @@ class MainApp:
             log.error("Could not update the status bar: %s", e)
         self._time_label.config(text=f"Last updated: {now}")
 
+    def show_update_available(self, info: dict) -> None:
+        """
+        Tell the user a newer version exists.
+
+        Informative, not a nag: one status-bar line they can dismiss, and a
+        dialog only when the release is marked critical — that flag is for
+        security fixes, so it is the one case worth interrupting for. Nothing
+        is ever downloaded or installed automatically.
+        """
+        version = info.get("version", "")
+        url = info.get("url", "")
+
+        bar = tk.Frame(self.root, bg='#1e3a5f')
+        bar.pack(fill='x', side='top')
+
+        label = "Security update" if info.get("critical") else "Update available"
+        tk.Label(bar, text=f"  {label}: FocusGuard {version}",
+                 bg='#1e3a5f', fg=TEXT,
+                 font=('Segoe UI', 9, 'bold')).pack(side='left', pady=5)
+
+        if info.get("notes"):
+            tk.Label(bar, text=f"  — {info['notes'][:80]}",
+                     bg='#1e3a5f', fg=TEXT2,
+                     font=('Segoe UI', 9)).pack(side='left', pady=5)
+
+        tk.Button(bar, text="Dismiss", bg='#1e3a5f', fg=TEXT2,
+                  font=('Segoe UI', 9), relief='flat', bd=0,
+                  cursor='hand2',
+                  command=bar.destroy).pack(side='right', padx=8)
+
+        if url:
+            tk.Button(bar, text="Download", bg=ACCENT, fg='#ffffff',
+                      font=('Segoe UI', 9, 'bold'),
+                      relief='flat', bd=0, padx=12, cursor='hand2',
+                      command=lambda: threading.Thread(
+                          target=lambda: webbrowser.open(url),
+                          daemon=True).start()).pack(side='right', padx=4)
+
+        log.info("Update %s advertised to the user.", version)
+
     def show_kill_toast(self, app_name: str, limit_min: int) -> None:
         """Show an on-screen toast notification that an app was force-closed."""
         try:

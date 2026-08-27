@@ -323,6 +323,36 @@ class Database:
             (week_ago, today),
         )
 
+    def prune_sessions_older_than(self, days: int) -> int:
+        """
+        Delete sessions older than `days`. Returns how many rows went.
+
+        Without this the usage_sessions table grows for as long as the app
+        stays installed, and every date-filtered query gets steadily more
+        expensive (AUDIT SF-11). It is also data minimisation: history the user
+        cannot see anywhere in the UI has no reason to sit on their disk.
+
+        `days <= 0` means keep everything and is a no-op.
+        """
+        if days <= 0:
+            return 0
+
+        cutoff = (date.today() - timedelta(days=days)).isoformat()
+        with self._lock, self._conn:
+            cursor = self._conn.execute(
+                "DELETE FROM usage_sessions WHERE date < ?;", (cutoff,)
+            )
+            return cursor.rowcount or 0
+
+    def oldest_session_date(self) -> str:
+        """Date of the earliest recorded session, or "" if there are none."""
+        row = self._fetchone("SELECT MIN(date) AS oldest FROM usage_sessions;")
+        return (row or {}).get("oldest") or ""
+
+    def session_count(self) -> int:
+        row = self._fetchone("SELECT COUNT(*) AS n FROM usage_sessions;")
+        return int((row or {}).get("n") or 0)
+
     def delete_all_data(self, include_apps: bool = True) -> None:
         """
         Delete the user's recorded data.

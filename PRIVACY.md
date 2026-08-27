@@ -29,7 +29,7 @@ FocusGuard stores locally:
 | Names and file paths of the apps you choose to track | `%LOCALAPPDATA%\FocusGuard\focusguard.db` | So it can recognise them when they run |
 | Start time, end time and duration of each session | same database | To calculate your usage against your limits |
 | Your settings and limits | `%LOCALAPPDATA%\FocusGuard\config.json` | To remember your preferences |
-| A diagnostic log | `%LOCALAPPDATA%\FocusGuard\monitor.log` | To help diagnose problems |
+| A diagnostic log | `%LOCALAPPDATA%\FocusGuard\focusguard.log` | To help diagnose problems |
 
 FocusGuard checks the list of running processes to detect the apps you asked it
 to track. It does **not** record what you type, what you look at, the contents
@@ -59,6 +59,16 @@ your region.
 We do **not** sell your data, share it with advertisers, or use it to build
 advertising profiles.
 
+## Checking for updates
+
+On startup FocusGuard fetches a small file from our server to see whether a
+newer version exists. That request unavoidably reveals your IP address and the
+version you are running, the same as visiting any web page. It sends nothing
+about you, your apps or your usage, and it never downloads or installs anything
+— if there is an update, you are told, and you choose whether to get it.
+
+Turn it off in Settings if you would rather it did not happen.
+
 ## Legal basis (EU/UK users)
 
 Local-only use involves no transfer to us. Where you enable sync, we rely on
@@ -68,11 +78,11 @@ registering, or by deleting your data as described below.
 
 ## How long we keep it
 
-Local data stays on your PC until you delete it. Synced data is retained until
-you request deletion.
+By default, usage history older than **one year** is deleted automatically. You
+can change that in Settings, including keeping everything forever.
 
-> **Known gap:** automatic data retention limits are not implemented yet — see
-> `ROADMAP.md`. Until they are, local data accumulates indefinitely.
+Your tracked-app list and settings stay until you remove them. Synced data is
+retained until you request deletion.
 
 ## Your choices
 
@@ -80,13 +90,12 @@ you request deletion.
   ever transmitted.
 - **See your data.** It is a standard SQLite database at the path above. The
   Export CSV button on the Processes tab produces a readable copy.
-- **Delete your data.** Settings → Delete All Data.
+- **Delete your data.** Settings → Delete All Data removes your usage history,
+  your tracked-app list, your settings and the diagnostic log from this PC.
 
-> **Known gap:** the delete button currently clears usage sessions but not your
-> tracked-app list, the diagnostic log, or anything already synced to the
-> server. This is tracked as BL-06 in `AUDIT.md` and must be fixed before
-> public release. Until then, delete `%LOCALAPPDATA%\FocusGuard` manually to
-> remove all local data.
+> **Note:** that button covers this computer only. If you registered the device
+> for sync, data already uploaded to the server is not covered — there is no
+> server-side deletion endpoint yet. This is tracked as BL-06 in `AUDIT.md`.
 
 ## Children
 

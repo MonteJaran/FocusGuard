@@ -3,12 +3,15 @@ settings_page.py - Settings tab for FocusGuard.
 """
 
 import os
-import sys
 import subprocess
+import sys
+import tkinter as tk
+from tkinter import messagebox, ttk
+
+from core.logging_setup import get_logger
 from core.version import __version__
 
-import tkinter as tk
-from tkinter import ttk, messagebox
+log = get_logger("ui.settings")
 
 # ── Color Scheme ─────────────────────────────────────────────────────────────
 BG      = '#1a1a2e'
@@ -287,6 +290,57 @@ class SettingsPage(ttk.Frame):
         tk.Label(parent, text=f"Data folder: {data_dir}",
                  bg=BG, fg=TEXT2, font=('Segoe UI', 9)).pack(anchor='w', padx=32, pady=(0, 6))
 
+        # ── Retention ─────────────────────────────────────────────────────────
+        # PRIVACY.md tells the user they can change this here, so this control
+        # has to exist for that statement to be true.
+        _RETENTION_CHOICES = [
+            ("Keep for 30 days", 30),
+            ("Keep for 90 days", 90),
+            ("Keep for 1 year", 365),
+            ("Keep for 2 years", 730),
+            ("Keep everything", 0),
+        ]
+
+        retention_row = ttk.Frame(parent, style='TFrame')
+        retention_row.pack(anchor='w', padx=32, pady=(4, 2))
+
+        tk.Label(retention_row, text="Usage history:",
+                 bg=BG, fg=TEXT, font=('Segoe UI', 10)).pack(side='left', padx=(0, 8))
+
+        current_days = self.config.get("retention_days", 365)
+        current_label = next(
+            (label for label, days in _RETENTION_CHOICES if days == current_days),
+            f"Keep for {current_days} days",
+        )
+        self._retention_var = tk.StringVar(value=current_label)
+
+        retention_box = ttk.Combobox(
+            retention_row, textvariable=self._retention_var, state='readonly',
+            values=[label for label, _days in _RETENTION_CHOICES], width=20,
+        )
+        retention_box.pack(side='left')
+
+        def _on_retention(_event=None) -> None:
+            chosen = self._retention_var.get()
+            for label, days in _RETENTION_CHOICES:
+                if label == chosen:
+                    self.config.set("retention_days", days)
+                    break
+
+        retention_box.bind('<<ComboboxSelected>>', _on_retention)
+
+        oldest = ""
+        try:
+            oldest = self.db.oldest_session_date()
+        except Exception as exc:
+            log.debug("Could not read the oldest session date: %s", exc)
+
+        detail = "Older history is deleted automatically, once a day."
+        if oldest:
+            detail += f" Your earliest record is from {oldest}."
+        tk.Label(parent, text=detail,
+                 bg=BG, fg=TEXT2, font=('Segoe UI', 9)).pack(anchor='w', padx=32, pady=(0, 8))
+
         btn_row = ttk.Frame(parent, style='TFrame')
         btn_row.pack(anchor='w', padx=32, pady=(0, 6))
 
@@ -296,7 +350,8 @@ class SettingsPage(ttk.Frame):
                    command=self._clear_all_data, style='Danger.TButton').pack(side='left')
 
         tk.Label(parent,
-                 text="Data is stored locally on this computer. No personal information is collected.",
+                 text="Usage data is stored locally on this computer. Nothing is "
+                      "uploaded unless you register this device on the Devices tab.",
                  bg=BG, fg=TEXT2, font=('Segoe UI', 9), wraplength=580, justify='left',
                  ).pack(anchor='w', padx=32, pady=(2, 6))
 

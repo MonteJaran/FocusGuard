@@ -113,9 +113,31 @@ Do not weaken that denylist.
 - [ ] Uninstall, and confirm the Run key and `%LOCALAPPDATA%\FocusGuard` are handled
 - [ ] Confirm an app is warned before it is closed, and gets a chance to save
 
+## Publishing an update
+
+`core/updates.py` checks a static JSON manifest at startup and tells the user
+if a newer version exists. It never downloads or installs anything — an app
+that can silently replace its own executable is a much larger security surface
+than this project needs.
+
+The manifest is a static file, so host it free on GitHub Pages, Cloudflare
+Pages, or anywhere. See `packaging/version.json.example`:
+
+```json
+{
+  "version": "1.1.0",
+  "url": "https://focusguard.app/download",
+  "notes": "Fixes a crash when...",
+  "critical": false
+}
+```
+
+Set `critical: true` for a security fix — the app then interrupts rather than
+showing a dismissible bar. Point `UPDATE_MANIFEST_URL` in `core/updates.py` at
+wherever you host it, and publish the new manifest **after** the download is
+actually live.
+
 ## Still missing
 
-- **No update mechanism.** Once someone installs, there is no way to ship them
-  a fix. Needs a version endpoint and an in-app check.
 - **Dependencies are not pinned by hash.** `requirements.txt` uses lower bounds,
   so two builds a month apart are not identical. Pin exactly before release.

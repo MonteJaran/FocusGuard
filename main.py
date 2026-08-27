@@ -9,7 +9,7 @@ from tkinter import messagebox
 # Ensure we can import our modules regardless of working directory
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from core import logging_setup, tray
+from core import logging_setup, tray, updates
 from core.config import Config
 from core.consent import has_consented, record_consent, show_consent_dialog
 from core.database import Database
@@ -173,6 +173,15 @@ def main() -> None:
     root.deiconify()
     root.lift()
     root.focus_force()
+
+    # ── Update check ──────────────────────────────────────────────────────────
+    # Background, and only after the window is up: a slow or unreachable host
+    # must never delay startup. Fires only when there IS an update.
+    if config.get("check_for_updates", True):
+        def _on_update(info):
+            root.after(0, lambda: app.show_update_available(info))
+
+        root.after(3000, lambda: updates.check_in_background(_on_update))
 
     # ── Main loop ─────────────────────────────────────────────────────────────
     root.mainloop()

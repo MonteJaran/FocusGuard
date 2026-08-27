@@ -33,15 +33,14 @@ you rather than to one machine.
 - **Notes:** device registration, 8-char link codes and the 30-minute upload
   protocol are already designed and partly built
 
-### 2. Configurable data retention
-Free tier keeps a rolling window; Premium keeps full history.
+### 2. Configurable data retention — SHIPPED
 
-- **Status:** not started — there is currently **no** retention logic on either
-  tier, so nothing is ever pruned
-- **Blocked on:** nothing; this is self-contained
-- **Notes:** pairs naturally with the database indices in AUDIT SF-11. Prune on
-  a schedule, not at startup, so launch stays fast. Originally advertised as
-  "4 weeks" free / "unlimited" premium
+- **Status:** done. `retention_days` defaults to 365; 0 keeps everything.
+  Pruning runs on the daily date rollover the monitor already detects, not at
+  startup, so launch stays fast.
+- **Note:** this is now a plain user setting rather than a paid tier. Making
+  someone pay to keep their own history is a poor trade, and the database
+  indices (SF-11) solved the performance half of the problem anyway.
 
 ### 3. Pattern recognition across your history
 Surface real patterns from recorded usage: which app tends to precede a long
