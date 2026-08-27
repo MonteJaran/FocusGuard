@@ -179,11 +179,11 @@ class InsightsPage(ttk.Frame):
                      font=('Segoe UI', 12, 'bold'),
                      wraplength=160, justify='left').pack(anchor='w')
             tk.Label(card, text=cat, bg=BG2, fg=TEXT2,
-                     font=('Segoe UI', 8)).pack(anchor='w')
+                     font=('Segoe UI', 9)).pack(anchor='w')
             tk.Label(card, text=_fmt(sec), bg=BG2, fg=time_color,
                      font=('Segoe UI', 22, 'bold')).pack(anchor='w', pady=(6, 0))
             tk.Label(card, text="this week", bg=BG2, fg=TEXT2,
-                     font=('Segoe UI', 8)).pack(anchor='w')
+                     font=('Segoe UI', 9)).pack(anchor='w')
 
     # ── Distracting apps — "time cost" framing ────────────────────────────────
 
@@ -222,7 +222,7 @@ class InsightsPage(ttk.Frame):
             cmp_text = "%.1f h/wk below world average (%.0f h/wk)" % (abs(diff), world_avg)
             cmp_color = SUCCESS
         tk.Label(card_a, text=cmp_text, bg=BG2, fg=cmp_color,
-                 font=('Segoe UI', 8)).pack(anchor='w', pady=(6, 0))
+                 font=('Segoe UI', 9)).pack(anchor='w', pady=(6, 0))
 
         # Card B — equivalents
         card_b = self._card(f, col=1, row=0)
@@ -240,7 +240,7 @@ class InsightsPage(ttk.Frame):
             tk.Label(row, text=" %s " % val, bg=BG2, fg=WARNING,
                      font=('Segoe UI', 10, 'bold')).pack(side='left')
             tk.Label(row, text=sub, bg=BG2, fg=TEXT2,
-                     font=('Segoe UI', 8)).pack(side='left')
+                     font=('Segoe UI', 9)).pack(side='left')
 
         # Additional bad apps (smaller cards)
         if len(bad_apps) > 1:
@@ -261,7 +261,7 @@ class InsightsPage(ttk.Frame):
                 sign = "+" if diff2 > 0 else ""
                 ccolor = ERROR if diff2 > 0 else SUCCESS
                 tk.Label(c, text="%s%.1f h vs world avg" % (sign, diff2),
-                         bg=BG2, fg=ccolor, font=('Segoe UI', 8)).pack(anchor='w')
+                         bg=BG2, fg=ccolor, font=('Segoe UI', 9)).pack(anchor='w')
 
     # ── Productive apps — positive reinforcement ──────────────────────────────
 
@@ -299,16 +299,16 @@ class InsightsPage(ttk.Frame):
             tk.Label(card, text="\u2705 " + app["name"], bg=BG2, fg=SUCCESS,
                      font=('Segoe UI', 11, 'bold')).pack(anchor='w')
             tk.Label(card, text=cat, bg=BG2, fg=TEXT2,
-                     font=('Segoe UI', 8)).pack(anchor='w')
+                     font=('Segoe UI', 9)).pack(anchor='w')
             tk.Label(card, text=_fmt(sec), bg=BG2, fg=SUCCESS,
                      font=('Segoe UI', 22, 'bold')).pack(anchor='w', pady=(6, 0))
             tk.Label(card, text="this week", bg=BG2, fg=TEXT2,
-                     font=('Segoe UI', 8)).pack(anchor='w')
+                     font=('Segoe UI', 9)).pack(anchor='w')
             tk.Label(card, text=pct_msg, bg=BG2, fg=pct_col,
-                     font=('Segoe UI', 8, 'bold')).pack(anchor='w', pady=(6, 0))
+                     font=('Segoe UI', 9, 'bold')).pack(anchor='w', pady=(6, 0))
             world_str = "World avg: %.0f h/wk" % world
             tk.Label(card, text=world_str, bg=BG2, fg=TEXT2,
-                     font=('Segoe UI', 8)).pack(anchor='w')
+                     font=('Segoe UI', 9)).pack(anchor='w')
 
     # ── Peak hours bar chart ──────────────────────────────────────────────────
 
@@ -350,7 +350,7 @@ class InsightsPage(ttk.Frame):
             tk.Label(cf, text=lbl, bg=BG2, fg=TEXT2, font=('Segoe UI', 6)).pack()
 
         tk.Label(card, text="12 AM on left  \u2192  11 PM on right",
-                 bg=BG2, fg=TEXT2, font=('Segoe UI', 7)).pack(anchor='w', pady=(4, 0))
+                 bg=BG2, fg=TEXT2, font=('Segoe UI', 9)).pack(anchor='w', pady=(4, 0))
 
     # ── Category split ────────────────────────────────────────────────────────
 
@@ -453,6 +453,6 @@ class InsightsPage(ttk.Frame):
                      font=('Segoe UI', 9),
                      wraplength=170, justify='left').pack(anchor='w')
             tk.Label(card, text="Not available yet",
-                     bg=BG2, fg=TEXT2, font=('Segoe UI', 8, 'bold')).pack(anchor='w')
+                     bg=BG2, fg=TEXT2, font=('Segoe UI', 9, 'bold')).pack(anchor='w')
             tk.Label(card, text=t["sub"], bg=BG2, fg=TEXT2,
-                     font=('Segoe UI', 8)).pack(anchor='w', pady=(2, 0))
+                     font=('Segoe UI', 9)).pack(anchor='w', pady=(2, 0))

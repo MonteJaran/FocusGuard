@@ -5,6 +5,8 @@ settings_page.py - Settings tab for FocusGuard.
 import os
 import sys
 import subprocess
+from core.version import __version__
+
 import tkinter as tk
 from tkinter import ttk, messagebox
 
@@ -19,7 +21,7 @@ SUCCESS = '#4ade80'
 WARNING = '#fbbf24'
 ERROR   = '#f87171'
 
-_APP_VERSION = "1.0.0"
+_APP_VERSION = __version__   # single source of truth: core/version.py
 
 
 class SettingsPage(ttk.Frame):
@@ -392,6 +394,6 @@ class SettingsPage(ttk.Frame):
                  ).pack(anchor='w', padx=16, pady=(0, 8))
 
         tk.Label(info_frame,
-                 text="Built with Python + tkinter  |  psutil  |  pystray  |  Pillow  |  plyer",
+                 text="Built with Python + tkinter  |  psutil  |  plyer",
                  bg=BG2, fg=TEXT2, font=('Segoe UI', 9),
                  ).pack(anchor='w', padx=16, pady=(0, 12))

@@ -347,17 +347,27 @@ class Database:
 
     def delete_log_file(self) -> bool:
         """
-        Remove the diagnostic log, which contains a plaintext record of every
-        app the user opened. Returns True if a file was removed.
+        Remove the diagnostic logs, which contain a plaintext record of every
+        app the user opened.
+
+        Covers rotated backups and the pre-1.0 monitor.log, not just the live
+        file -- deleting only the current one would leave the history behind,
+        which is exactly the BL-06 mistake in a different place.
+
+        Returns True if at least one file was removed.
         """
-        log_path = os.path.join(self._dir, "monitor.log")
-        try:
-            if os.path.isfile(log_path):
-                os.remove(log_path)
-                return True
-        except OSError:
-            pass
-        return False
+        from core.logging_setup import log_paths
+
+        candidates = log_paths(self._dir) + [os.path.join(self._dir, "monitor.log")]
+        removed = False
+        for path in candidates:
+            try:
+                if os.path.isfile(path):
+                    os.remove(path)
+                    removed = True
+            except OSError:
+                continue
+        return removed
 
     def close(self) -> None:
         with self._lock:

@@ -9,59 +9,83 @@ from tkinter import messagebox
 # Ensure we can import our modules regardless of working directory
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from core.database import Database
+from core import logging_setup, tray
 from core.config import Config
 from core.consent import has_consented, record_consent, show_consent_dialog
+from core.database import Database
 from core.monitor import Monitor
+from core.logging_setup import get_logger
+from core.version import __version__
 from ui.app import MainApp
+
+log = get_logger("main")
+
+
+def enable_dpi_awareness() -> None:
+    """
+    Tell Windows this process scales its own UI.
+
+    Without this, Tk is bitmap-stretched by the OS on any display above 100%
+    scaling, which is most laptops -- the whole window renders blurry and
+    undersized. Must be called before the first Tk window exists.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        # Per-monitor v2 where available (Windows 10 1703+), which also keeps
+        # the UI sharp when the window moves between displays.
+        try:
+            ctypes.windll.user32.SetProcessDpiAwarenessContext(-4)
+            return
+        except Exception:
+            pass
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)   # system-DPI aware
+            return
+        except Exception:
+            pass
+        ctypes.windll.user32.SetProcessDPIAware()            # Vista fallback
+    except Exception:
+        # Deliberate: every path above is a best-effort probe for an API that
+        # may not exist on this Windows version. Blurry is survivable;
+        # crashing before the window opens is not.
+        pass
 
 
 def create_tray_icon(root: tk.Tk, quit_fn):
     """
-    Create and return a pystray system tray icon, or None if pystray/Pillow
-    are not available.
+    Build the system tray icon, or None if one is unavailable.
+
+    Uses core/tray.py (ctypes + Shell_NotifyIcon) rather than pystray, which is
+    LGPL-3.0. Callbacks arrive on the tray thread, so both marshal back to the
+    Tk main thread with root.after().
     """
-    try:
-        import pystray
-        from PIL import Image, ImageDraw
+    icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "FocusGuard.ico")
 
-        # Draw a simple clock-like icon
-        img = Image.new('RGBA', (64, 64), (0, 0, 0, 0))
-        d = ImageDraw.Draw(img)
-        # Outer ring
-        d.ellipse([0, 0, 63, 63], fill='#1a1a2e')
-        d.ellipse([0, 0, 63, 63], outline='#e94560', width=4)
-        # Inner circle
-        d.ellipse([8, 8, 55, 55], fill='#0f3460')
-        # Clock hands
-        d.line([32, 32, 32, 14], fill='#e94560', width=4)
-        d.line([32, 32, 46, 38], fill='#e0e0e0', width=3)
-        # Centre dot
-        d.ellipse([28, 28, 36, 36], fill='#e0e0e0')
+    def show_window():
+        root.after(0, lambda: (root.deiconify(), root.lift(), root.focus_force()))
 
-        def show_window(icon, item):
-            root.after(0, lambda: (root.deiconify(), root.lift(), root.focus_force()))
+    def on_quit():
+        root.after(0, quit_fn)
 
-        def on_quit(icon, item):
-            icon.stop()
-            root.after(0, quit_fn)
-
-        menu = pystray.Menu(
-            pystray.MenuItem('Show FocusGuard', show_window, default=True),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem('Quit', on_quit),
-        )
-        icon = pystray.Icon('FocusGuard', img, 'FocusGuard \u2014 Running', menu)
-        return icon
-
-    except Exception:
-        return None
+    return tray.create_tray(
+        on_show=show_window,
+        on_quit=on_quit,
+        icon_path=icon_path if os.path.isfile(icon_path) else "",
+        tooltip=f"FocusGuard {__version__} \u2014 Running",
+    )
 
 
 def main() -> None:
+    # Before any Tk window exists, or the UI renders blurry on high-DPI screens.
+    enable_dpi_awareness()
+
     # ── Core services ─────────────────────────────────────────────────────────
     try:
         db = Database()
+        logging_setup.configure(db.data_dir)
     except Exception as exc:
         messagebox.showerror("FocusGuard \u2014 Database Error",
                              f"Could not initialise the database:\n{exc}")
@@ -104,18 +128,15 @@ def main() -> None:
 
     # ── Quit handler ──────────────────────────────────────────────────────────
     def do_quit() -> None:
-        try:
-            monitor.stop()
-        except Exception:
-            pass
-        try:
-            db.close()
-        except Exception:
-            pass
-        try:
-            root.destroy()
-        except Exception:
-            pass
+        # Each step is independent: one failing must not strand the others and
+        # leave the process alive, but it should still be recorded.
+        for label, step in (("stop monitor", monitor.stop),
+                            ("close database", db.close),
+                            ("destroy window", root.destroy)):
+            try:
+                step()
+            except Exception as e:
+                log.error("Shutdown step '%s' failed: %s", label, e)
 
     app.quit_app = do_quit
 
@@ -157,14 +178,18 @@ def main() -> None:
     root.mainloop()
 
     # Cleanup after mainloop exits (e.g. OS-level close)
-    try:
-        monitor.stop()
-    except Exception:
-        pass
-    try:
-        db.close()
-    except Exception:
-        pass
+    for label, step in (("stop monitor", monitor.stop),
+                        ("close database", db.close)):
+        try:
+            step()
+        except Exception as e:
+            log.error("Cleanup step '%s' failed: %s", label, e)
+
+    if tray_icon[0] is not None:
+        try:
+            tray_icon[0].stop()
+        except Exception as e:
+            log.debug("Could not stop tray icon: %s", e)
 
 
 if __name__ == '__main__':

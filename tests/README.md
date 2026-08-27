@@ -21,6 +21,9 @@ Every test runs against a temp directory, so the suite never touches your real
 | `test_procutil.py` | The staged close sequence, against a faked psutil — no real processes are touched |
 | `test_monitor_grace.py` | The warning countdown before an app is closed, and the daily rollover reset |
 | `test_storage_hardening.py` | Schema versioning, index usage, complete deletion, atomic config writes, concurrent writers |
+| `test_activity.py` | The accounting rules — sleep caps, idle, foreground — as pure functions |
+| `test_monitor_polling.py` | The polling loop end to end, with psutil, the clock and the activity probes all faked |
+| `test_logging_and_packaging.py` | Log rotation and format, the version single-source, and dependency hygiene |
 
 ## The regression guards
 
@@ -54,12 +57,24 @@ bugchecks the box, and terminating without warning destroys unsaved work.
 `test_procutil.py` fakes psutil rather than starting real processes, so the
 close sequence can be asserted step by step without side effects.
 
+## The polling harness
+
+`test_monitor_polling.py` fakes psutil, `time.monotonic`, `datetime.now` **and**
+`database.date.today` together. That last one matters: the monitor and the
+database each decide "today" independently, so faking only one leaves them
+disagreeing and every date-filtered query silently returns nothing.
+
+With all four faked, a session running past midnight or a machine asleep for
+eight hours is reproducible exactly, in milliseconds, with no real clock
+involved. That is how SF-04 and SF-05 were fixed — and the harness caught a
+real ordering bug along the way: crediting time before splitting at midnight
+files post-midnight usage under yesterday.
+
 ## Not covered yet
 
 The Tk UI modules are not imported by the suite because CI runners have no
 display; the `syntax` CI job byte-compiles them instead.
 
-`core/monitor.py`'s polling loop still needs a psutil fake of its own. AUDIT
-SF-04 (sessions are not split at midnight) and SF-05 (no idle or sleep
-detection) live there and are both open — they are exactly the kind of bug a
-unit test catches, and should be fixed test-first.
+`core/tray.py` is Win32-only and cannot be exercised here — the tests confirm
+it imports and degrades to None off Windows, but the icon itself needs a real
+Windows box.

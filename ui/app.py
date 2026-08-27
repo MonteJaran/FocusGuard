@@ -8,11 +8,14 @@ from datetime import datetime
 import webbrowser
 import threading
 
+from core.logging_setup import get_logger
 from ui.files_page import FilesPage
 from ui.processes_page import ProcessesPage
 from ui.settings_page import SettingsPage
 from ui.devices_page import DevicesPage
 from ui.insights_page import InsightsPage
+
+log = get_logger("ui")
 
 # ── Kill Toast Notification ────────────────────────────────────────────────────
 
@@ -90,6 +93,7 @@ class KillToast:
         try:
             self._win.destroy()
         except Exception:
+            # The window may already be gone; nothing to report.
             pass
 
 # ── Color Scheme ──────────────────────────────────────────────────────────────
@@ -319,7 +323,7 @@ class AdBanner(tk.Frame):
         pill = tk.Frame(self, bg='#0d1b33')
         pill.pack(side='left', padx=(10, 6), pady=0, fill='y')
         tk.Label(pill, text=" Ad ", bg='#1e3a5f', fg='#6080a0',
-                 font=('Segoe UI', 7), relief='flat',
+                 font=('Segoe UI', 9), relief='flat',
                  padx=3).pack(side='left', anchor='center', pady=17)
 
         # Divider
@@ -331,7 +335,7 @@ class AdBanner(tk.Frame):
         centre.bind('<Button-1>', self._on_click)
 
         self._lbl_label    = tk.Label(centre, text="", bg='#0d1b33', fg='#4a7fa0',
-                                      font=('Segoe UI', 7), anchor='w', cursor='hand2')
+                                      font=('Segoe UI', 9), anchor='w', cursor='hand2')
         self._lbl_label.pack(fill='x', anchor='w', pady=(9, 0))
         self._lbl_label.bind('<Button-1>', self._on_click)
 
@@ -341,7 +345,7 @@ class AdBanner(tk.Frame):
         self._lbl_headline.bind('<Button-1>', self._on_click)
 
         self._lbl_sub      = tk.Label(centre, text="", bg='#0d1b33', fg='#607080',
-                                      font=('Segoe UI', 8), anchor='w', cursor='hand2')
+                                      font=('Segoe UI', 9), anchor='w', cursor='hand2')
         self._lbl_sub.pack(fill='x', anchor='w')
         self._lbl_sub.bind('<Button-1>', self._on_click)
 
@@ -350,7 +354,7 @@ class AdBanner(tk.Frame):
         right.pack(side='right', padx=(0, 14), pady=0, fill='y')
 
         self._lbl_tag = tk.Label(right, text="", bg='#0d1b33', fg='#3a5a78',
-                                 font=('Segoe UI', 8), cursor='hand2')
+                                 font=('Segoe UI', 9), cursor='hand2')
         self._lbl_tag.pack(anchor='center', pady=17)
         self._lbl_tag.bind('<Button-1>', self._on_click)
 
@@ -494,29 +498,31 @@ class MainApp:
         self.root.after(5000, self._refresh_cycle)
 
     def refresh_all(self) -> None:
+        # A refresh failure used to be invisible: the UI silently froze on
+        # stale data with nothing recorded anywhere.
         try:
             self.files_page.refresh()
-        except Exception:
-            pass
+        except Exception as e:
+            log.error("Files tab refresh failed: %s", e)
         try:
             self.processes_page.refresh()
-        except Exception:
-            pass
+        except Exception as e:
+            log.error("Processes tab refresh failed: %s", e)
         now = datetime.now().strftime("%H:%M:%S")
         try:
             count = len(self.db.get_all_tracked_apps())
             running = len(self.monitor.running_apps)
             self._status_var.set(f"Tracking {count} app(s)  |  {running} running now")
-        except Exception:
-            pass
+        except Exception as e:
+            log.error("Could not update the status bar: %s", e)
         self._time_label.config(text=f"Last updated: {now}")
 
     def show_kill_toast(self, app_name: str, limit_min: int) -> None:
         """Show an on-screen toast notification that an app was force-closed."""
         try:
             KillToast(self.root, app_name, limit_min)
-        except Exception:
-            pass
+        except Exception as e:
+            log.error("Could not show the close notification: %s", e)
 
     def _on_tab_changed(self, event=None) -> None:
         try:
@@ -525,8 +531,8 @@ class MainApp:
                 self.insights_page.refresh()
             elif selected == str(self.devices_page):
                 self.devices_page.refresh()
-        except Exception:
-            pass
+        except Exception as e:
+            log.error("Tab switch refresh failed: %s", e)
 
     def update_status_bar(self, msg: str) -> None:
         self._status_var.set(msg)

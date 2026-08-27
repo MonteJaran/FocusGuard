@@ -20,6 +20,12 @@ DEFAULT_CONFIG: dict = {
     # Warning period between hitting the limit and the app being closed, so
     # the user has time to save. Floored at MIN_GRACE_SECONDS in monitor.py.
     "close_grace_seconds": 60,
+    # Count time only while the app is the window you are actually working in.
+    # With this off, an app sitting in a background window accrues time at the
+    # same rate as one in use.
+    "count_foreground_only": True,
+    # Stop counting after this long with no keyboard or mouse input.
+    "idle_threshold_sec": 300,
     "first_run": True,
     # Privacy consent (see core/consent.py). 0 = never accepted; the app shows
     # the consent gate and records nothing until this matches CONSENT_VERSION.

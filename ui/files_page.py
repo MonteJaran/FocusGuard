@@ -499,7 +499,7 @@ class FilesPage(ttk.Frame):
                  font=('Segoe UI', 9, 'bold')).pack(anchor='w', padx=16, pady=(8, 2))
         tk.Label(dialog,
                  text="Choose what kind of app this is — affects how Insights treats it.",
-                 bg=BG, fg='#9090a0', font=('Segoe UI', 8)).pack(anchor='w', padx=16)
+                 bg=BG, fg='#9090a0', font=('Segoe UI', 9)).pack(anchor='w', padx=16)
 
         _CATEGORIES = [
             # (label,          value,          group,        color)
@@ -528,7 +528,7 @@ class FilesPage(ttk.Frame):
         # Section headers
         def _cat_section(parent, title, title_color):
             tk.Label(parent, text=title, bg=BG, fg=title_color,
-                     font=('Segoe UI', 8, 'bold')).pack(anchor='w', pady=(6, 2))
+                     font=('Segoe UI', 9, 'bold')).pack(anchor='w', pady=(6, 2))
             row = tk.Frame(parent, bg=BG)
             row.pack(fill='x')
             return row
@@ -548,7 +548,7 @@ class FilesPage(ttk.Frame):
                     bg=col if is_sel else '#0f3460',
                     fg='#0a1020' if is_sel else col,
                     relief='flat',
-                    font=('Segoe UI', 8, 'bold') if is_sel else ('Segoe UI', 8),
+                    font=('Segoe UI', 9, 'bold') if is_sel else ('Segoe UI', 9),
                 )
 
         for label, value, group, color in _CATEGORIES:
@@ -559,7 +559,7 @@ class FilesPage(ttk.Frame):
                 bg=color if is_sel else '#0f3460',
                 fg='#0a1020' if is_sel else color,
                 activebackground=color, activeforeground='#0a1020',
-                font=('Segoe UI', 8, 'bold') if is_sel else ('Segoe UI', 8),
+                font=('Segoe UI', 9, 'bold') if is_sel else ('Segoe UI', 9),
                 relief='flat', bd=0, padx=10, pady=4, cursor='hand2',
                 command=lambda v=value: _select(v),
             )

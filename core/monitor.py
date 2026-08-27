@@ -3,30 +3,29 @@ monitor.py - Background monitoring thread for FocusGuard.
 """
 
 import threading
-import os
-import traceback
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 
 try:
     import psutil
     _PSUTIL_AVAILABLE = True
 except ImportError:
+    # Bind the name even when unavailable, so every reference below is a
+    # simple attribute lookup rather than a NameError waiting to happen.
+    psutil = None
     _PSUTIL_AVAILABLE = False
 
-from core import procutil
+from core import activity, procutil
+from core.logging_setup import get_logger
 from core.protected import is_protected
+
+log = get_logger("monitor")
 
 # How long the user gets between "you have hit your limit" and the app being
 # closed. Gives them time to save. Overridable via the close_grace_seconds
 # config key; never drops below this floor.
 MIN_GRACE_SECONDS = 10
 DEFAULT_GRACE_SECONDS = 60
-
-# Log file for diagnostics
-_LOG_PATH = os.path.join(
-    os.environ.get("LOCALAPPDATA", os.path.expanduser("~")),
-    "FocusGuard", "monitor.log"
-)
 
 # Optional notification support
 def _send_notification(title: str, message: str) -> None:
@@ -120,10 +119,10 @@ class Monitor:
             sessions = list(self.active_sessions.items())
         for _app_id, session in sessions:
             try:
-                duration = int((now - session["start_time"]).total_seconds())
-                self.db.end_session(session["session_id"], now.isoformat(), duration)
+                self.db.end_session(session["session_id"], now.isoformat(),
+                                    int(session["counted_sec"]))
             except Exception as e:
-                self._log(f"Error ending session on stop: {e}")
+                log.error("Could not end session on stop: %s", e)
         with self._lock:
             self.active_sessions.clear()
             self.running_apps.clear()
@@ -148,15 +147,17 @@ class Monitor:
         result = {}
         try:
             apps = self.db.get_all_tracked_apps()
+            with self._lock:
+                running = set(self.running_apps)
             for app in apps:
                 app_id = app["id"]
                 result[app_id] = {
-                    "running": app_id in self.running_apps,
-                    "today_sec": self.db.get_today_usage_sec(app_id),
+                    "running": app_id in running,
+                    "today_sec": self._usage_today_sec(app_id),
                     "week_sec": self.db.get_week_usage_sec(app_id),
                 }
-        except Exception:
-            pass
+        except Exception as e:
+            log.error("Could not build status snapshot: %s", e)
         return result
 
     # ── Internal ──────────────────────────────────────────────────────────────
@@ -166,13 +167,8 @@ class Monitor:
         self._poll_now.set()
 
     def _log(self, msg: str) -> None:
-        """Write a timestamped line to the log file."""
-        try:
-            os.makedirs(os.path.dirname(_LOG_PATH), exist_ok=True)
-            with open(_LOG_PATH, "a", encoding="utf-8") as f:
-                f.write(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}\n")
-        except Exception:
-            pass
+        """Per-poll detail. DEBUG so it is off unless someone is debugging."""
+        log.debug(msg)
 
     def _run(self) -> None:
         """Main monitor loop."""
@@ -181,9 +177,8 @@ class Monitor:
             try:
                 self._poll()
             except Exception as e:
-                err = traceback.format_exc()
                 self.last_poll_error = str(e)
-                self._log(f"POLL ERROR: {err}")
+                log.exception("Poll failed: %s", e)
             # Sleep until poll_interval elapses OR trigger_poll() is called
             self._poll_now.wait(timeout=self.config.get("poll_interval", 60))
             self._poll_now.clear()
@@ -239,12 +234,7 @@ class Monitor:
 
                     # Is it over the limit (include current active session)?
                     app_id = app["id"]
-                    today_sec = self.db.get_today_usage_sec(app_id)
-                    with self._lock:
-                        active = self.active_sessions.get(app_id)
-                    if active:
-                        elapsed = (datetime.now() - active["start_time"]).total_seconds()
-                        today_sec += int(elapsed)
+                    today_sec = self._usage_today_sec(app_id)
 
                     if today_sec >= daily_limit * 60:
                         # Warns and starts a grace period on the first pass;
@@ -282,6 +272,11 @@ class Monitor:
 
         now = datetime.now()
         changed = False
+
+        # Sampled once per poll rather than per app: both are OS calls, and
+        # every app in this pass is being judged against the same instant.
+        foreground_exe = activity.get_foreground_exe()
+        idle_seconds = activity.get_idle_seconds()
 
         for app in enabled_apps:
             app_id = app["id"]
@@ -325,15 +320,14 @@ class Monitor:
                 try:
                     session_id = self.db.start_session(app_id, now.isoformat())
                     with self._lock:
-                        self.active_sessions[app_id] = {
-                            "session_id": session_id,
-                            "start_time": now,
-                        }
+                        self.active_sessions[app_id] = self._new_session(
+                            session_id, now)
                         self.running_apps.add(app_id)
                     changed = True
                     self._fire("app_started", {"app_id": app_id, "name": app["name"]})
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.error("Could not start session for '%s': %s",
+                              app["name"], e)
 
             elif not is_running and app_id in self.active_sessions:
                 # App just stopped
@@ -342,30 +336,51 @@ class Monitor:
                     self.running_apps.discard(app_id)
                 changed = True
                 try:
-                    duration = int((now - session["start_time"]).total_seconds())
-                    self.db.end_session(session["session_id"], now.isoformat(), duration)
+                    self.db.end_session(session["session_id"], now.isoformat(),
+                                        int(session["counted_sec"]))
                     self._fire("app_stopped", {"app_id": app_id, "name": app["name"]})
                     # Clear limit notification cache on stop so it can warn again next run
-                    self._notified_limits.discard(app_id)
-                except Exception:
-                    pass
+                    with self._lock:
+                        self._notified_limits.discard(app_id)
+                except Exception as e:
+                    log.error("Could not end session for '%s': %s", app["name"], e)
 
             elif is_running and app_id in self.active_sessions:
-                # App still running — check limits
+                with self._lock:
+                    session = self.active_sessions.get(app_id)
+                if session is None:
+                    continue
+
+                # Split BEFORE crediting. The interval that straddles midnight
+                # is credited to the new day, because crediting it first would
+                # file time earned after midnight under yesterday's date.
+                if self._split_at_midnight(app_id, app, session, now):
+                    changed = True
+                    with self._lock:
+                        session = self.active_sessions.get(app_id)
+                    if session is None:
+                        continue
+
+                # Credit this interval before anything reads the total, so the
+                # limit check sees current numbers.
+                credited = self._accrue(app, session, foreground_exe, idle_seconds)
+                self._log(f"  '{app['name']}': credited {credited}s "
+                          f"(total {session['counted_sec']}s)")
+
                 daily_limit = app.get("daily_limit_min", 0)
                 if daily_limit and daily_limit > 0:
                     self._check_limits(app_id, app["name"], exe_name, exe_path, daily_limit)
 
         # Save progress for all still-running sessions so data survives crashes
-        now_save = datetime.now()
         with self._lock:
             open_sessions = list(self.active_sessions.items())
         for _app_id, session in open_sessions:
             try:
-                duration = int((now_save - session["start_time"]).total_seconds())
-                self.db.update_session_duration(session["session_id"], duration)
-            except Exception:
-                pass
+                counted = int(session["counted_sec"])
+                self.db.update_session_duration(session["session_id"], counted)
+                session["written_sec"] = counted
+            except Exception as e:
+                log.error("Could not checkpoint session: %s", e)
 
         if changed:
             self._fire("status_update", {})
@@ -391,6 +406,113 @@ class Monitor:
         except Exception as e:
             self._log(f"psutil iteration error: {e}")
         return names, paths
+
+    # ── Usage accounting ──────────────────────────────────────────────────────
+
+    def _new_session(self, session_id: int, now: datetime) -> dict:
+        """
+        A session record.
+
+        `counted_sec` is the accumulated *counted* usage, not wall-clock time
+        since start: time while the machine was asleep, or while the user was
+        away, or while the app sat in a background window, does not go in here.
+        `tick` is a monotonic timestamp so the accounting cannot be skewed by
+        DST or the user changing the clock.
+        """
+        return {
+            "session_id": session_id,
+            "start_time": now,
+            "date": now.date(),
+            "counted_sec": 0,     # accrued so far
+            "written_sec": 0,     # how much of that is already in the database
+            "tick": time.monotonic(),
+        }
+
+    def _accrue(self, app: dict, session: dict, foreground_exe: str,
+                idle_seconds: float) -> int:
+        """
+        Add this interval's counted usage to a running session.
+
+        Returns the number of seconds credited, which may be zero.
+        """
+        now_tick = time.monotonic()
+        wall = now_tick - session["tick"]
+        session["tick"] = now_tick
+
+        poll_interval = self.config.get("poll_interval", 60) or 60
+        exe_name = (app.get("exe_name") or "").lower().strip()
+
+        is_foreground = None
+        if foreground_exe:
+            is_foreground = bool(exe_name) and foreground_exe == exe_name
+
+        if activity.was_asleep(wall, poll_interval):
+            log.info("Gap of %.0fs since last tick for '%s' — machine was "
+                     "asleep or stalled; crediting one interval at most.",
+                     wall, app.get("name", "?"))
+
+        credited = activity.counted_seconds(
+            wall,
+            poll_interval,
+            is_foreground=is_foreground,
+            idle_seconds=idle_seconds,
+            require_foreground=bool(self.config.get("count_foreground_only", True)),
+            idle_threshold_sec=self.config.get(
+                "idle_threshold_sec", activity.DEFAULT_IDLE_THRESHOLD_SEC),
+        )
+        session["counted_sec"] += credited
+        return credited
+
+    def _split_at_midnight(self, app_id: int, app: dict, session: dict,
+                           now: datetime) -> bool:
+        """
+        Close a session that has run past midnight and open a fresh one.
+
+        Without this, a session started at 23:50 keeps filing its whole run
+        under yesterday's date, and get_today_usage_sec() — which filters on
+        date = today — stops seeing it entirely, so the daily counter silently
+        resets to zero mid-session.
+
+        Returns True if the session was rolled over.
+        """
+        if session["date"] == now.date():
+            return False
+
+        boundary = datetime.combine(session["date"], datetime.max.time())
+        try:
+            self.db.end_session(session["session_id"], boundary.isoformat(),
+                                int(session["counted_sec"]))
+            new_id = self.db.start_session(app_id, now.isoformat())
+        except Exception as e:
+            log.error("Could not split session for '%s' at midnight: %s",
+                      app.get("name", "?"), e)
+            return False
+
+        log.info("'%s' ran past midnight — filed %ds under %s and started a "
+                 "new session for %s.", app.get("name", "?"),
+                 int(session["counted_sec"]), session["date"], now.date())
+
+        with self._lock:
+            fresh = self._new_session(new_id, now)
+            fresh["tick"] = session["tick"]   # keep accounting continuous
+            self.active_sessions[app_id] = fresh
+        return True
+
+    def _usage_today_sec(self, app_id: int) -> int:
+        """
+        Today's usage, including what the running session has accrued since the
+        last checkpoint.
+
+        The database already holds everything up to `written_sec`; anything
+        beyond that is in memory only, so the un-checkpointed remainder is what
+        gets added. Without this the limit check lags by up to a poll interval.
+        """
+        total = self.db.get_today_usage_sec(app_id)
+        with self._lock:
+            session = self.active_sessions.get(app_id)
+            if session and session["date"] == datetime.now().date():
+                total += max(0, session["counted_sec"] - session["written_sec"])
+        return int(total)
 
     def _grace_seconds(self) -> int:
         """Warning period before an over-limit app is closed."""
@@ -441,7 +563,6 @@ class Monitor:
             deadline = self._close_deadlines.get(app_id)
             if deadline is None:
                 grace = self._grace_seconds()
-                from datetime import timedelta
                 self._close_deadlines[app_id] = now + timedelta(seconds=grace)
                 warn = True
             else:
@@ -494,22 +615,16 @@ class Monitor:
         if daily_limit_min <= 0:
             return False
         try:
-            today_sec = self.db.get_today_usage_sec(app_id)
-            return today_sec >= daily_limit_min * 60
-        except Exception:
+            return self._usage_today_sec(app_id) >= daily_limit_min * 60
+        except Exception as e:
+            log.error("Could not read usage for app %s: %s", app_id, e)
             return False
 
     def _check_limits(self, app_id: int, app_name: str, exe_name: str,
                       exe_path: str, daily_limit_min: int) -> None:
         """Notify and optionally kill app if it has exceeded or is near its daily limit."""
         try:
-            today_sec = self.db.get_today_usage_sec(app_id)
-            # Add current session time for accuracy
-            with self._lock:
-                active = self.active_sessions.get(app_id)
-            if active:
-                elapsed = (datetime.now() - active["start_time"]).total_seconds()
-                today_sec += int(elapsed)
+            today_sec = self._usage_today_sec(app_id)
 
             limit_sec = daily_limit_min * 60
             warn_pct  = self.config.get("warn_at_percent", 80)

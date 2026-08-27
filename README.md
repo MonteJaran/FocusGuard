@@ -22,8 +22,9 @@ records. Nothing is monitored until you accept it.
 ## Layout
 
 ```
-core/       monitoring, storage, config, consent gate,
-            protected-process denylist, staged app closing
+core/       monitoring, storage, config, consent gate, logging,
+            protected-process denylist, staged app closing,
+            usage-accounting rules, Win32 tray
 ui/         Tkinter tabs (files, processes, insights, devices, settings)
 server/     request/response models for the sync backend
 tests/      pytest suite — see tests/README.md
@@ -33,7 +34,7 @@ tests/      pytest suite — see tests/README.md
 
 ```bash
 python -m pip install pytest ruff
-python -m pytest          # 152 tests, none touch your real data
+python -m pytest          # 216 tests, none touch your real data
 python -m ruff check .    # lint
 ```
 

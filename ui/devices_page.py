@@ -199,7 +199,7 @@ class DevicesPage(ttk.Frame):
 
             tk.Button(id_frame, text="Copy",
                       bg=ACCENT, fg='#fff',
-                      font=('Segoe UI', 8, 'bold'),
+                      font=('Segoe UI', 9, 'bold'),
                       relief='flat', bd=0, padx=10, pady=6,
                       activebackground='#c73652', activeforeground='#fff',
                       cursor='hand2',
@@ -208,7 +208,7 @@ class DevicesPage(ttk.Frame):
             tk.Label(card,
                      text="Keep this ID safe — it's your identity across all devices.\n"
                           "It is never linked to your email or personal data.",
-                     bg=BG2, fg=TEXT2, font=('Segoe UI', 8),
+                     bg=BG2, fg=TEXT2, font=('Segoe UI', 9),
                      justify='left', anchor='w').pack(fill='x')
 
         else:
@@ -232,7 +232,7 @@ class DevicesPage(ttk.Frame):
             tk.Label(card,
                      text="Your email is used only to deliver your Device ID — it is\n"
                           "never stored on our servers.",
-                     bg=BG2, fg=TEXT2, font=('Segoe UI', 8),
+                     bg=BG2, fg=TEXT2, font=('Segoe UI', 9),
                      justify='left', anchor='w').pack(fill='x', pady=(0, 10))
 
             self._reg_btn = tk.Button(card, text="Register This Device",
@@ -246,7 +246,7 @@ class DevicesPage(ttk.Frame):
             self._reg_btn.pack(anchor='w')
 
             self._reg_status = tk.Label(card, text="", bg=BG2, fg=TEXT2,
-                                        font=('Segoe UI', 8))
+                                        font=('Segoe UI', 9))
             self._reg_status.pack(anchor='w', pady=(4, 0))
 
     # ── Section: Linked Devices ───────────────────────────────────────────────
@@ -317,7 +317,7 @@ class DevicesPage(ttk.Frame):
             tk.Label(card,
                      text=f"Device limit reached ({max_dev}). A higher limit is planned "
                           f"but not available yet.",
-                     bg=BG2, fg=WARNING, font=('Segoe UI', 8)).pack(anchor='w', pady=(8, 0))
+                     bg=BG2, fg=WARNING, font=('Segoe UI', 9)).pack(anchor='w', pady=(8, 0))
 
         # Link key display (shown after "Link New Device" is clicked)
         self._key_frame = tk.Frame(card, bg=BG3)
@@ -336,12 +336,12 @@ class DevicesPage(ttk.Frame):
                  font=('Courier New', 8)).pack(side='left', padx=(0, 10))
 
         tk.Label(row, text=status_text, bg='#0d1e38', fg=status_color,
-                 font=('Segoe UI', 8)).pack(side='left')
+                 font=('Segoe UI', 9)).pack(side='left')
 
         if not is_self and on_remove:
             tk.Button(row, text="Remove",
                       bg='#0d1e38', fg=ERROR,
-                      font=('Segoe UI', 8),
+                      font=('Segoe UI', 9),
                       relief='flat', bd=0, padx=8,
                       activebackground='#7f1d1d', activeforeground=ERROR,
                       cursor='hand2',
@@ -368,7 +368,7 @@ class DevicesPage(ttk.Frame):
                  font=('Segoe UI', 14, 'bold')).pack(side='left', padx=14, pady=10)
         if plan == "freemium":
             tk.Label(free_hdr, text="CURRENT", bg='#0f3460', fg=SUCCESS,
-                     font=('Segoe UI', 8, 'bold')).pack(side='right', padx=10)
+                     font=('Segoe UI', 9, 'bold')).pack(side='right', padx=10)
 
         tk.Label(free_card, text="$0 / month",
                  bg=BG2, fg=TEXT2, font=('Segoe UI', 10)).pack(
@@ -392,7 +392,7 @@ class DevicesPage(ttk.Frame):
         tk.Label(hdr_frame, text="★ Premium", bg=prem_hdr, fg=GOLD,
                  font=('Segoe UI', 14, 'bold')).pack(side='left', padx=14, pady=10)
         tk.Label(hdr_frame, text="IN DEVELOPMENT", bg=prem_hdr, fg=TEXT3,
-                 font=('Segoe UI', 8, 'bold')).pack(side='right', padx=10)
+                 font=('Segoe UI', 9, 'bold')).pack(side='right', padx=10)
 
         # No price is shown while Premium cannot actually be bought. Pricing
         # comes back here once payment and server-side entitlement are live.
@@ -409,7 +409,7 @@ class DevicesPage(ttk.Frame):
         tk.Label(prem_card,
                  text="Planned",
                  bg=prem_bg, fg=TEXT3,
-                 font=('Segoe UI', 8, 'bold')).pack(anchor='w', padx=14, pady=(8, 2))
+                 font=('Segoe UI', 9, 'bold')).pack(anchor='w', padx=14, pady=(8, 2))
 
         for feat in _PLANNED_FEATURES:
             _feature_row(prem_card, feat, unlocked=False, bg=prem_bg, planned=True)
@@ -418,7 +418,7 @@ class DevicesPage(ttk.Frame):
                  text="Not built yet, and not included in any purchase.\n"
                       "See ROADMAP.md for the full plan.",
                  bg=prem_bg, fg=TEXT3, justify='left',
-                 font=('Segoe UI', 8)).pack(anchor='w', padx=14, pady=(8, 12))
+                 font=('Segoe UI', 9)).pack(anchor='w', padx=14, pady=(8, 12))
 
     # ── Helpers: API calls ────────────────────────────────────────────────────
 
@@ -546,7 +546,7 @@ class DevicesPage(ttk.Frame):
                   command=lambda: self._copy(key)).pack(pady=(10, 4))
 
         self._countdown_lbl = tk.Label(popup, text="", bg=BG, fg=WARNING,
-                                       font=('Segoe UI', 8))
+                                       font=('Segoe UI', 9))
         self._countdown_lbl.pack()
 
         def _tick():
@@ -589,7 +589,7 @@ class DevicesPage(ttk.Frame):
         entry.focus_set()
 
         status_lbl = tk.Label(dialog, text="", bg=BG, fg=TEXT2,
-                              font=('Segoe UI', 8))
+                              font=('Segoe UI', 9))
         status_lbl.pack()
 
         def _join():
@@ -732,7 +732,7 @@ def _sep(parent):
 
 def _status_dot(parent, color: str, label: str) -> tk.Label:
     return tk.Label(parent, text=f"\u25cf  {label}",
-                    bg=BG2, fg=color, font=('Segoe UI', 8))
+                    bg=BG2, fg=color, font=('Segoe UI', 9))
 
 
 def _feature_row(parent, text: str, unlocked: bool, bg: str, planned: bool = False):
@@ -763,4 +763,4 @@ def _feature_row(parent, text: str, unlocked: bool, bg: str, planned: bool = Fal
 
     if planned:
         tk.Label(row, text="PLANNED", bg=bg, fg=TEXT3,
-                 font=('Segoe UI', 7)).pack(side='right')
+                 font=('Segoe UI', 9)).pack(side='right')

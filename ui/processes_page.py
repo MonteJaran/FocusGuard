@@ -5,11 +5,15 @@ Shows real-time usage statistics for all tracked applications.
 
 import os
 import csv
+
+from core.logging_setup import get_logger
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime
 
 # ── Color Scheme ─────────────────────────────────────────────────────────────
+log = get_logger("ui.processes")
+
 BG      = '#1a1a2e'
 BG2     = '#16213e'
 BG3     = '#0f3460'
@@ -307,8 +311,10 @@ class ProcessesPage(ttk.Frame):
                     self._app_details  = data.get("appDetails", [])
                     self._linked_device_count = data.get("devices", 1)
                     self.after(0, self.refresh)
-            except Exception:
-                pass
+            except Exception as e:
+                # Sync is best-effort, but a persistent failure needs to be
+                # findable rather than swallowed.
+                log.warning("Device sync failed: %s", e)
 
         t = threading.Thread(target=_fetch, daemon=True)
         t.start()
@@ -357,7 +363,7 @@ class ProcessesPage(ttk.Frame):
             row=1, column=1, sticky='w', padx=(8, 0))
 
         tk.Label(dialog, text="Set to 0 to disable the limit.",
-                 bg=BG, fg=TEXT2, font=('Segoe UI', 8)).pack(padx=16, pady=(6, 0), anchor='w')
+                 bg=BG, fg=TEXT2, font=('Segoe UI', 9)).pack(padx=16, pady=(6, 0), anchor='w')
 
         def save() -> None:
             self.db.set_app_limits(app_id, daily_var.get(), weekly_var.get())

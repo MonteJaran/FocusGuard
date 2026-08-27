@@ -1,12 +1,10 @@
 [project]
 name = "focusguard"
-version = "1.0.0"
+version = "1.0.0"   # keep in sync with core/version.py (a test enforces this)
 description = "Windows application usage tracker and limiter"
 requires-python = ">=3.10"
 dependencies = [
     "psutil>=5.9.0",
-    "pystray>=0.19.4",
-    "Pillow>=10.0.0",
     "plyer>=2.1.0",
 ]
 
