@@ -8,7 +8,8 @@ All data stays on your PC unless you deliberately enable device sync.
 
 ## Running it
 
-Run **`FocusGuard.bat`**. It checks for Python, installs dependencies, and
+Run **`FocusGuard.bat`**. It creates a virtual environment in `.venv`,
+installs dependencies *there* rather than into your system Python, and
 launches the app. You can set it to start automatically on boot from the
 Settings tab.
 
@@ -16,8 +17,9 @@ On first run FocusGuard shows a privacy notice describing exactly what it
 records. Nothing is monitored until you accept it.
 
 > **Not ready for public release.** See [`AUDIT.md`](AUDIT.md) — there are open
-> safety and legal items, and the launcher installs packages into your global
-> Python at every start. Read it before distributing this to anyone.
+> legal items, no payment path, and no code-signing certificate, so SmartScreen
+> will warn every user. Read it, and [`BUILD.md`](BUILD.md), before
+> distributing this to anyone.
 
 ## Layout
 
@@ -34,7 +36,7 @@ tests/      pytest suite — see tests/README.md
 
 ```bash
 python -m pip install pytest ruff
-python -m pytest          # 216 tests, none touch your real data
+python -m pytest          # 249 tests, none touch your real data
 python -m ruff check .    # lint
 ```
 
@@ -48,6 +50,7 @@ a byte-compile of the Tk modules, and a real install of `requirements.txt`.
 | [`AUDIT.md`](AUDIT.md) | Full readiness audit — legal, safety, and engineering findings with a phased plan |
 | [`ROADMAP.md`](ROADMAP.md) | Planned features and what each one is blocked on |
 | [`PRIVACY.md`](PRIVACY.md) | Privacy policy (draft — needs legal review) |
+| [`BUILD.md`](BUILD.md) | Building, signing, and the Microsoft Store route past SmartScreen |
 
 ## Three rules for contributors
 

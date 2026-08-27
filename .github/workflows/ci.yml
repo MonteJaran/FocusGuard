@@ -88,4 +88,14 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Import every runtime dependency
-        run: python -c "import psutil, pystray, plyer, PIL; print('runtime deps OK')"
+        # pystray and Pillow were dropped in favour of core/tray.py (ctypes),
+        # so importing them here would now fail. Keep this list matching
+        # requirements.txt.
+        run: python -c "import psutil, plyer; print('runtime deps OK')"
+
+      - name: Verify the packaging config
+        # PyInstaller and Inno Setup cannot run here, but the spec, the
+        # installer script and the launcher can be checked for drift.
+        run: |
+          python -m pip install pytest
+          python -m pytest tests/test_packaging_build.py -v

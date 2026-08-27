@@ -24,6 +24,7 @@ Every test runs against a temp directory, so the suite never touches your real
 | `test_activity.py` | The accounting rules — sleep caps, idle, foreground — as pure functions |
 | `test_monitor_polling.py` | The polling loop end to end, with psutil, the clock and the activity probes all faked |
 | `test_logging_and_packaging.py` | Log rotation and format, the version single-source, and dependency hygiene |
+| `test_packaging_build.py` | The PyInstaller spec, installer script and launcher — drift and antivirus-trigger regressions |
 
 ## The regression guards
 

@@ -1,93 +1,97 @@
 @echo off
-setlocal enabledelayedexpansion
+setlocal
 title FocusGuard
 cd /d "%~dp0"
-cls
 
 :: ─────────────────────────────────────────────────────────────────────────────
-::  Banner
+::  Run FocusGuard from source, in its own virtual environment.
+::
+::  This is the DEVELOPER / source path. End users should get the installer
+::  built by packaging\build.ps1 -- see BUILD.md.
+::
+::  Three things this deliberately does NOT do, all of which the previous
+::  version did (AUDIT ST-01, ST-03):
+::
+::    * install packages into the user's GLOBAL Python. That silently upgrades
+::      or downgrades libraries other projects depend on, and the user blames
+::      whichever of their tools breaks first.
+::    * download and execute a Python installer from the internet with no
+::      checksum. Scored heavily by antivirus heuristics, and rightly.
+::    * run PowerShell with -ExecutionPolicy Bypass. Same reason.
 :: ─────────────────────────────────────────────────────────────────────────────
-powershell -NoProfile -Command ^
-    "Write-Host ''; " ^
-    "Write-Host '  ╔══════════════════════════════════════════╗' -ForegroundColor Cyan; " ^
-    "Write-Host '  ║' -ForegroundColor Cyan -NoNewline; " ^
-    "Write-Host '   F O C U S G U A R D' -ForegroundColor Yellow -NoNewline; " ^
-    "Write-Host '                  ║' -ForegroundColor Cyan; " ^
-    "Write-Host '  ║  App Usage Monitor and Limiter         ║' -ForegroundColor Cyan; " ^
-    "Write-Host '  ╚══════════════════════════════════════════╝' -ForegroundColor Cyan; " ^
-    "Write-Host '';"
 
-:: ─────────────────────────────────────────────────────────────────────────────
-::  Check Python
-:: ─────────────────────────────────────────────────────────────────────────────
-python --version >nul 2>&1
-if %errorlevel% neq 0 goto :no_python
+echo.
+echo   FocusGuard - App Usage Monitor
+echo   -----------------------------
+echo.
 
-powershell -NoProfile -Command "Write-Host '  [OK] Python detected.' -ForegroundColor Green"
-goto :deps
+:: ── Python ───────────────────────────────────────────────────────────────────
+where py >nul 2>&1
+if %errorlevel% equ 0 (
+    set "PY=py -3"
+) else (
+    where python >nul 2>&1
+    if %errorlevel% neq 0 goto :no_python
+    set "PY=python"
+)
+
+:: ── Virtual environment ──────────────────────────────────────────────────────
+if not exist ".venv\Scripts\pythonw.exe" (
+    echo   Creating a virtual environment in .venv ...
+    %PY% -m venv .venv
+    if %errorlevel% neq 0 goto :venv_failed
+    echo   [OK] Created.
+    echo.
+    echo   Installing dependencies ...
+    ".venv\Scripts\python.exe" -m pip install --upgrade pip --quiet
+    ".venv\Scripts\python.exe" -m pip install -r requirements.txt
+    if %errorlevel% neq 0 goto :deps_failed
+    echo   [OK] Dependencies installed.
+    echo.
+)
+
+:: ── Desktop shortcut, best effort ────────────────────────────────────────────
+if exist "create_shortcut.ps1" (
+    powershell -NoProfile -File "create_shortcut.ps1"
+)
+
+:: ── Launch ───────────────────────────────────────────────────────────────────
+echo   Starting FocusGuard ...
+start "" ".venv\Scripts\pythonw.exe" main.py
+if %errorlevel% neq 0 goto :launch_failed
+
+echo   [OK] Running. Look for the icon in your system tray.
+timeout /t 3 >nul
+exit /b 0
 
 :: ─────────────────────────────────────────────────────────────────────────────
 :no_python
-:: ─────────────────────────────────────────────────────────────────────────────
-powershell -NoProfile -Command ^
-    "Write-Host '  ╔══════════════════════════════════════════╗' -ForegroundColor Red; " ^
-    "Write-Host '  ║  Python is not installed on this PC.    ║' -ForegroundColor Red; " ^
-    "Write-Host '  ║  FocusGuard requires Python 3.10+.      ║' -ForegroundColor Red; " ^
-    "Write-Host '  ╚══════════════════════════════════════════╝' -ForegroundColor Red; " ^
-    "Write-Host ''; " ^
-    "Write-Host '  Press ENTER to download and install Python automatically.' -ForegroundColor Yellow; " ^
-    "Write-Host '  (Official installer from python.org)' -ForegroundColor DarkGray; " ^
-    "Write-Host '';"
+echo   Python 3.10 or newer is required, and was not found.
+echo.
+echo   Install it from https://www.python.org/downloads/
+echo   Tick "Add python.exe to PATH" during setup, then run this file again.
+echo.
+pause
+exit /b 1
 
-pause >nul
+:venv_failed
+echo   [ERROR] Could not create the virtual environment.
+echo   Check that your Python install includes the "venv" module.
+echo.
+pause
+exit /b 1
 
-powershell -NoProfile -Command ^
-    "Write-Host '  Downloading Python 3.12 ...' -ForegroundColor Cyan; " ^
-    "$url = 'https://www.python.org/ftp/python/3.12.7/python-3.12.7-amd64.exe'; " ^
-    "$out = \"$env:TEMP\python_installer.exe\"; " ^
-    "try { Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing; " ^
-    "  Write-Host '  Download complete. Launching installer...' -ForegroundColor Green; " ^
-    "  Start-Process $out -Wait; " ^
-    "  Write-Host ''; " ^
-    "  Write-Host '  Done! Please close this window and run FocusGuard.bat again.' -ForegroundColor Green; " ^
-    "} catch { Write-Host \"  ERROR: $($_.Exception.Message)\" -ForegroundColor Red; }; " ^
-    "Write-Host ''; " ^
-    "Write-Host '  Press any key to exit...' -ForegroundColor DarkGray;"
+:deps_failed
+echo   [ERROR] Could not install dependencies.
+echo   The error above has the detail. Check your internet connection.
+echo.
+pause
+exit /b 1
 
-pause >nul
-exit /b
-
-:: ─────────────────────────────────────────────────────────────────────────────
-:deps
-:: ─────────────────────────────────────────────────────────────────────────────
-powershell -NoProfile -Command "Write-Host '  Checking dependencies...' -ForegroundColor Cyan"
-python -m pip install -r requirements.txt -q --exists-action i >nul 2>&1
-if %errorlevel% neq 0 (
-    powershell -NoProfile -Command "Write-Host '  Installing dependencies...' -ForegroundColor Yellow"
-    python -m pip install -r requirements.txt -q
-)
-powershell -NoProfile -Command "Write-Host '  [OK] Dependencies ready.' -ForegroundColor Green"
-
-:: ─────────────────────────────────────────────────────────────────────────────
-::  Generate icon (once)
-:: ─────────────────────────────────────────────────────────────────────────────
-if not exist FocusGuard.ico (
-    powershell -NoProfile -Command "Write-Host '  Building icon...' -ForegroundColor Cyan"
-    python generate_icon.py
-    powershell -NoProfile -Command "Write-Host '  [OK] Icon ready.' -ForegroundColor Green"
-)
-
-:: ─────────────────────────────────────────────────────────────────────────────
-::  Create desktop shortcut (once)
-:: ─────────────────────────────────────────────────────────────────────────────
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0create_shortcut.ps1"
-
-:: ─────────────────────────────────────────────────────────────────────────────
-::  Launch
-:: ─────────────────────────────────────────────────────────────────────────────
-powershell -NoProfile -Command ^
-    "Write-Host ''; " ^
-    "Write-Host '  Launching FocusGuard...' -ForegroundColor Green; " ^
-    "Write-Host '';"
-timeout /t 1 >nul
-start "" pythonw main.py
+:launch_failed
+echo   [ERROR] FocusGuard did not start.
+echo   Run this to see the error:
+echo       .venv\Scripts\python.exe main.py
+echo.
+pause
+exit /b 1
