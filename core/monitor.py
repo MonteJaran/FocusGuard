@@ -13,6 +13,15 @@ try:
 except ImportError:
     _PSUTIL_AVAILABLE = False
 
+from core import procutil
+from core.protected import is_protected
+
+# How long the user gets between "you have hit your limit" and the app being
+# closed. Gives them time to save. Overridable via the close_grace_seconds
+# config key; never drops below this floor.
+MIN_GRACE_SECONDS = 10
+DEFAULT_GRACE_SECONDS = 60
+
 # Log file for diagnostics
 _LOG_PATH = os.path.join(
     os.environ.get("LOCALAPPDATA", os.path.expanduser("~")),
@@ -20,7 +29,7 @@ _LOG_PATH = os.path.join(
 )
 
 # Optional notification support
-def _send_notification(title: str, message: str, sound: bool = False) -> None:
+def _send_notification(title: str, message: str) -> None:
     try:
         from plyer import notification
         notification.notify(
@@ -67,8 +76,17 @@ class Monitor:
         # list of callables: fn(event_type: str, data: dict)
         self.callbacks = []
 
+        # Guards active_sessions / running_apps / _notified_limits, all of
+        # which are touched by the monitor thread, the kill watcher and the UI.
+        self._lock = threading.RLock()
+
         # Cache to avoid notifying the same limit breach repeatedly
         self._notified_limits = set()  # app_ids already warned today
+        # The day _notified_limits refers to, so warnings resume after midnight
+        self._notified_day = datetime.now().date()
+        # app_id -> datetime after which the app may be closed. Set when the
+        # limit is first hit so the user gets a warning before anything closes.
+        self._close_deadlines = {}
         # Event to wake the monitor thread immediately for a poll
         self._poll_now = threading.Event()
 
@@ -98,16 +116,20 @@ class Monitor:
         self._stop_event.set()
         # End all active sessions cleanly
         now = datetime.now()
-        for _app_id, session in list(self.active_sessions.items()):
+        with self._lock:
+            sessions = list(self.active_sessions.items())
+        for _app_id, session in sessions:
             try:
                 duration = int((now - session["start_time"]).total_seconds())
                 self.db.end_session(session["session_id"], now.isoformat(), duration)
-            except Exception:
-                pass
-        self.active_sessions.clear()
-        self.running_apps.clear()
-        if self._thread:
-            self._thread.join(timeout=5)
+            except Exception as e:
+                self._log(f"Error ending session on stop: {e}")
+        with self._lock:
+            self.active_sessions.clear()
+            self.running_apps.clear()
+        for thread in (self._thread, self._kill_thread):
+            if thread:
+                thread.join(timeout=5)
 
     def add_callback(self, fn) -> None:
         """Register a callback fn(event_type, data) for state changes."""
@@ -178,6 +200,7 @@ class Monitor:
             self._stop_event.wait(timeout=5)
             if self._stop_event.is_set():
                 break
+            self._reset_daily_state_if_needed()
             if not self.config.get("auto_kill_over_limit", False):
                 continue
             if not _PSUTIL_AVAILABLE:
@@ -217,20 +240,25 @@ class Monitor:
                     # Is it over the limit (include current active session)?
                     app_id = app["id"]
                     today_sec = self.db.get_today_usage_sec(app_id)
-                    if app_id in self.active_sessions:
-                        elapsed = (datetime.now() - self.active_sessions[app_id]["start_time"]).total_seconds()
+                    with self._lock:
+                        active = self.active_sessions.get(app_id)
+                    if active:
+                        elapsed = (datetime.now() - active["start_time"]).total_seconds()
                         today_sec += int(elapsed)
 
                     if today_sec >= daily_limit * 60:
-                        self._log(f"KillWatcher: '{app['name']}' over limit — killing.")
-                        killed = self._kill_app(app["name"], exe_name, exe_path)
-                        if killed:
+                        # Warns and starts a grace period on the first pass;
+                        # only closes once that deadline has passed.
+                        if not self._due_to_close(app_id, app["name"], daily_limit):
+                            continue
+                        closed = self._close_app(app["name"], exe_name, exe_path)
+                        if closed:
+                            self._clear_close_deadline(app_id)
                             if self.config.get("notifications_enabled", True):
                                 _send_notification(
                                     "FocusGuard — App Closed",
                                     f"{app['name']} was closed: daily limit of "
                                     f"{daily_limit} min reached.",
-                                    sound=False,
                                 )
                             if self.config.get("notification_sound", False):
                                 _play_kill_sound()
@@ -242,6 +270,7 @@ class Monitor:
 
     def _poll(self) -> None:
         """Check running processes, update sessions, check limits."""
+        self._reset_daily_state_if_needed()
         running_names, running_paths = self._get_running_info()
         self.last_poll_time = datetime.now()
         self.last_poll_proc_count = len(running_names)
@@ -275,15 +304,17 @@ class Monitor:
                 # App just started — check if it's already over the daily limit
                 if self.config.get("auto_kill_over_limit", False) and \
                         self._is_over_daily_limit(app_id, app):
-                    self._log(f"'{app['name']}' launched but already over limit — killing.")
-                    killed = self._kill_app(app["name"], exe_name, exe_path)
-                    if killed:
+                    # No grace period here: the app has only just launched, so
+                    # there is nothing unsaved to lose. It is still closed
+                    # politely rather than terminated.
+                    self._log(f"'{app['name']}' launched but already over limit — closing.")
+                    closed = self._close_app(app["name"], exe_name, exe_path)
+                    if closed:
                         if self.config.get("notifications_enabled", True):
                             _send_notification(
                                 "FocusGuard — App Blocked",
                                 f"{app['name']} was blocked: you have already reached "
                                 f"your daily limit of {app.get('daily_limit_min', 0)} min.",
-                                sound=False,
                             )
                         if self.config.get("notification_sound", False):
                             _play_kill_sound()
@@ -293,11 +324,12 @@ class Monitor:
 
                 try:
                     session_id = self.db.start_session(app_id, now.isoformat())
-                    self.active_sessions[app_id] = {
-                        "session_id": session_id,
-                        "start_time": now,
-                    }
-                    self.running_apps.add(app_id)
+                    with self._lock:
+                        self.active_sessions[app_id] = {
+                            "session_id": session_id,
+                            "start_time": now,
+                        }
+                        self.running_apps.add(app_id)
                     changed = True
                     self._fire("app_started", {"app_id": app_id, "name": app["name"]})
                 except Exception:
@@ -305,8 +337,9 @@ class Monitor:
 
             elif not is_running and app_id in self.active_sessions:
                 # App just stopped
-                session = self.active_sessions.pop(app_id)
-                self.running_apps.discard(app_id)
+                with self._lock:
+                    session = self.active_sessions.pop(app_id)
+                    self.running_apps.discard(app_id)
                 changed = True
                 try:
                     duration = int((now - session["start_time"]).total_seconds())
@@ -325,7 +358,9 @@ class Monitor:
 
         # Save progress for all still-running sessions so data survives crashes
         now_save = datetime.now()
-        for _app_id, session in list(self.active_sessions.items()):
+        with self._lock:
+            open_sessions = list(self.active_sessions.items())
+        for _app_id, session in open_sessions:
             try:
                 duration = int((now_save - session["start_time"]).total_seconds())
                 self.db.update_session_duration(session["session_id"], duration)
@@ -357,31 +392,101 @@ class Monitor:
             self._log(f"psutil iteration error: {e}")
         return names, paths
 
-    def _kill_app(self, app_name: str, exe_name: str, exe_path: str) -> bool:
+    def _grace_seconds(self) -> int:
+        """Warning period before an over-limit app is closed."""
+        try:
+            configured = int(self.config.get("close_grace_seconds",
+                                             DEFAULT_GRACE_SECONDS))
+        except (TypeError, ValueError):
+            configured = DEFAULT_GRACE_SECONDS
+        return max(MIN_GRACE_SECONDS, configured)
+
+    def _close_app(self, app_name: str, exe_name: str, exe_path: str) -> bool:
         """
-        Force-terminate all processes matching exe_name or exe_path.
-        Returns True if at least one process was killed.
+        Close every process matching this app, giving it a chance to save.
+
+        Posts WM_CLOSE first so the application runs its own save-and-exit
+        path, waits, and only terminates what refuses to go. Returns True if
+        the app is gone afterwards. See core/procutil.py.
         """
         if not _PSUTIL_AVAILABLE:
             return False
-        killed = False
-        exe_name_l = exe_name.lower().strip()
-        exe_path_l  = exe_path.lower().replace("\\", "/").strip()
+        if is_protected(exe_name, exe_path):
+            self._log(f"Refusing to close protected process for '{app_name}'.")
+            return False
         try:
-            for proc in psutil.process_iter(["name", "exe"]):
-                try:
-                    pname = (proc.info.get("name") or "").lower()
-                    pexe  = (proc.info.get("exe")  or "").lower().replace("\\", "/")
-                    if (exe_name_l and pname == exe_name_l) or \
-                       (exe_path_l  and pexe  == exe_path_l):
-                        proc.kill()
-                        killed = True
-                        self._log(f"Killed process '{pname}' (limit exceeded for {app_name})")
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
+            result = procutil.close_app(exe_name, exe_path, log=self._log)
         except Exception as e:
-            self._log(f"Error killing {app_name}: {e}")
-        return killed
+            self._log(f"Error closing {app_name}: {e}")
+            return False
+
+        if result["matched"]:
+            self._log(
+                f"Closed '{app_name}': matched={result['matched']} "
+                f"asked={result['asked']} forced={result['forced']}"
+            )
+        return result["closed"]
+
+    def _due_to_close(self, app_id: int, app_name: str, daily_limit_min: int) -> bool:
+        """
+        Decide whether an over-limit app may be closed yet.
+
+        The first time an app goes over, this starts a grace period and warns
+        the user instead of closing anything. Only once that deadline passes
+        does it return True. Without this the app is terminated the instant the
+        limit is crossed, with no chance to save.
+        """
+        now = datetime.now()
+        with self._lock:
+            deadline = self._close_deadlines.get(app_id)
+            if deadline is None:
+                grace = self._grace_seconds()
+                from datetime import timedelta
+                self._close_deadlines[app_id] = now + timedelta(seconds=grace)
+                warn = True
+            else:
+                warn = False
+
+        if warn:
+            self._log(f"'{app_name}' over limit — warning, closing in "
+                      f"{self._grace_seconds()}s.")
+            if self.config.get("notifications_enabled", True):
+                _send_notification(
+                    "FocusGuard — Save your work",
+                    f"{app_name} has reached its daily limit of "
+                    f"{daily_limit_min} min and will close in "
+                    f"{self._grace_seconds()} seconds.",
+                )
+            if self.config.get("notification_sound", False):
+                _play_kill_sound()
+            self._fire("close_pending", {
+                "app_id": app_id,
+                "name": app_name,
+                "limit_min": daily_limit_min,
+                "seconds": self._grace_seconds(),
+            })
+            return False
+
+        return now >= deadline
+
+    def _clear_close_deadline(self, app_id: int) -> None:
+        with self._lock:
+            self._close_deadlines.pop(app_id, None)
+
+    def _reset_daily_state_if_needed(self) -> None:
+        """
+        Clear per-day caches when the date rolls over.
+
+        Without this, _notified_limits keeps yesterday's entries forever and
+        the user stops receiving warnings entirely after day one.
+        """
+        today = datetime.now().date()
+        with self._lock:
+            if today != self._notified_day:
+                self._notified_day = today
+                self._notified_limits.clear()
+                self._close_deadlines.clear()
+                self._log(f"Date rolled over to {today} — daily state reset.")
 
     def _is_over_daily_limit(self, app_id: int, app: dict) -> bool:
         """Return True if the app has already used up its daily limit."""
@@ -400,8 +505,10 @@ class Monitor:
         try:
             today_sec = self.db.get_today_usage_sec(app_id)
             # Add current session time for accuracy
-            if app_id in self.active_sessions:
-                elapsed = (datetime.now() - self.active_sessions[app_id]["start_time"]).total_seconds()
+            with self._lock:
+                active = self.active_sessions.get(app_id)
+            if active:
+                elapsed = (datetime.now() - active["start_time"]).total_seconds()
                 today_sec += int(elapsed)
 
             limit_sec = daily_limit_min * 60
@@ -411,16 +518,19 @@ class Monitor:
             notify_key = f"{app_id}_{int(usage_pct // 10) * 10}"
 
             if usage_pct >= 100:
-                # Auto-kill if enabled
+                # Auto-close if enabled, after the user has had a warning and
+                # the grace period has elapsed.
                 if self.config.get("auto_kill_over_limit", False):
-                    killed = self._kill_app(app_name, exe_name, exe_path)
-                    if killed:
+                    if not self._due_to_close(app_id, app_name, daily_limit_min):
+                        return  # warned; give them time to save
+                    closed = self._close_app(app_name, exe_name, exe_path)
+                    if closed:
+                        self._clear_close_deadline(app_id)
                         if self.config.get("notifications_enabled", True):
                             _send_notification(
                                 "FocusGuard — App Closed",
                                 f"{app_name} was closed automatically: daily limit of "
                                 f"{daily_limit_min} min reached.",
-                                sound=False,
                             )
                         if self.config.get("notification_sound", False):
                             _play_kill_sound()
@@ -437,8 +547,9 @@ class Monitor:
                             "FocusGuard — Limit Reached",
                             f"{app_name} has exceeded its daily limit of {daily_limit_min} min "
                             f"(used {mins_used} min today).",
-                            sound=self.config.get("notification_sound", False),
                         )
+                        if self.config.get("notification_sound", False):
+                            _play_kill_sound()
                     self._fire("limit_exceeded", {"app_id": app_id, "name": app_name,
                                                   "usage_pct": usage_pct})
 
@@ -450,8 +561,9 @@ class Monitor:
                         "FocusGuard — Approaching Limit",
                         f"{app_name} — {int(usage_pct)}% of daily limit used. "
                         f"~{mins_remaining} min remaining.",
-                        sound=self.config.get("notification_sound", False),
                     )
+                    if self.config.get("notification_sound", False):
+                        _play_kill_sound()
         except Exception:
             pass
 

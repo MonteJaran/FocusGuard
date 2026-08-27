@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
 from core.apps_list import DEFAULT_APPS, APP_CATEGORIES, find_app_path, find_main_exe_in_folder
+from core.protected import is_protected, protection_reason
 
 # ── Color Scheme (mirrors app.py) ────────────────────────────────────────────
 BG      = '#1a1a2e'
@@ -308,6 +309,23 @@ class FilesPage(ttk.Frame):
                    style='Accent.TButton').pack(side='right', padx=(6, 0))
         ttk.Button(btn_frame, text="Close", command=dialog.destroy).pack(side='right')
 
+    def _reject_if_protected(self, exe_name: str, exe_path: str = "") -> bool:
+        """
+        Refuse to track a protected process, explaining why.
+
+        Without this the user can add a core Windows binary and give it a
+        daily limit, and FocusGuard would then close it. See core/protected.py.
+        """
+        if not is_protected(exe_name, exe_path):
+            return False
+        messagebox.showwarning(
+            "Cannot Track This Program",
+            f"{exe_name} cannot be tracked.\n\n"
+            f"{protection_reason(exe_name, exe_path)}",
+            parent=self,
+        )
+        return True
+
     def add_file(self) -> None:
         path = filedialog.askopenfilename(
             title="Select an Executable",
@@ -318,6 +336,8 @@ class FilesPage(ttk.Frame):
             return
         path = os.path.normpath(path)
         exe_name = os.path.basename(path)
+        if self._reject_if_protected(exe_name, path):
+            return
         root_folder = os.path.dirname(path)
         name = os.path.splitext(exe_name)[0].replace("_", " ").replace("-", " ").title()
 
@@ -350,6 +370,8 @@ class FilesPage(ttk.Frame):
             )
             return
         exe_name = os.path.basename(exe_path)
+        if self._reject_if_protected(exe_name, exe_path):
+            return
         folder_name = os.path.basename(folder)
         name = folder_name.replace("_", " ").replace("-", " ").title()
 
@@ -551,11 +573,17 @@ class FilesPage(ttk.Frame):
         btn_frame.pack(fill='x', pady=(8, 12), padx=16)
 
         def save() -> None:
+            new_exe  = e_exe.get().strip()
+            new_path = e_path.get().strip()
+            # The edit dialog is another route to pointing an entry at a
+            # protected binary, so it needs the same guard as the add dialogs.
+            if self._reject_if_protected(new_exe, new_path):
+                return
             self.db.update_tracked_app(
                 app_id,
                 name=e_name.get().strip() or app["name"],
-                exe_name=e_exe.get().strip(),
-                exe_path=e_path.get().strip(),
+                exe_name=new_exe,
+                exe_path=new_path,
                 root_folder=e_root.get().strip(),
                 category=_selected_cat[0],
             )

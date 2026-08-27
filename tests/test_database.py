@@ -2,7 +2,6 @@
 
 from datetime import date, datetime, timedelta
 
-import pytest
 
 from core.database import Database
 
@@ -197,13 +196,11 @@ def test_delete_all_data_clears_sessions(db):
     assert db.get_today_usage_sec(app_id) == 0
 
 
-@pytest.mark.xfail(
-    reason="AUDIT BL-06: delete_all_data() clears sessions but leaves the "
-           "tracked-app list, so the UI's 'All usage data has been deleted' "
-           "is not true yet.",
-    strict=True,
-)
 def test_delete_all_data_also_clears_tracked_apps(db):
+    """
+    Was AUDIT BL-06: the button said "All usage data has been deleted" while
+    leaving the tracked-app list — itself a record of what the user runs.
+    """
     db.add_tracked_app("Code", "code.exe")
     db.delete_all_data()
     assert db.get_all_tracked_apps() == []

@@ -936,23 +936,10 @@ DEFAULT_APPS = [
         ],
     },
     # ── System ───────────────────────────────────────────────────────────────
-    {
-        "name": "Task Manager",
-        "category": "System",
-        "exe_name": "Taskmgr.exe",
-        "root_folder_hints": [
-            _p(r"%SystemRoot%\System32"),
-        ],
-    },
-    {
-        "name": "PowerShell",
-        "category": "System",
-        "exe_name": "powershell.exe",
-        "root_folder_hints": [
-            _p(r"%SystemRoot%\System32\WindowsPowerShell\v1.0"),
-            _p(r"%SystemRoot%\SysWOW64\WindowsPowerShell\v1.0"),
-        ],
-    },
+    # Task Manager and PowerShell are deliberately NOT offered here. They are
+    # in core/protected.py: FocusGuard must never be able to close the tools a
+    # user needs to inspect or stop FocusGuard, and an app that terminates
+    # Task Manager on a loop is what antivirus heuristics score as a trojan.
     {
         "name": "Calculator",
         "category": "System",

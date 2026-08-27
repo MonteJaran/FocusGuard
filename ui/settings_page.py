@@ -316,7 +316,8 @@ class SettingsPage(ttk.Frame):
         dialog.resizable(False, False)
 
         tk.Label(dialog,
-                 text="This will permanently delete ALL usage history.\nThis action cannot be undone.",
+                 text="This permanently deletes your usage history, your tracked\n"
+                      "app list, and the diagnostic log.\nThis action cannot be undone.",
                  bg=BG, fg=WARNING, font=('Segoe UI', 10),
                  justify='center').pack(padx=20, pady=(18, 8))
 
@@ -337,9 +338,24 @@ class SettingsPage(ttk.Frame):
                 status_var.set("You must type DELETE (all caps) to confirm.")
                 return
             try:
+                # Sessions and the tracked-app list live in the database; the
+                # diagnostic log is a separate file and holds a plaintext record
+                # of every app opened, so it has to go too or the claim below
+                # is not true.
                 self.db.delete_all_data()
+                log_removed = self.db.delete_log_file()
                 dialog.destroy()
-                messagebox.showinfo("Done", "All usage data has been deleted.", parent=self)
+
+                removed = ["usage history", "tracked apps"]
+                if log_removed:
+                    removed.append("diagnostic log")
+                messagebox.showinfo(
+                    "Done",
+                    "Deleted from this PC: " + ", ".join(removed) + ".\n\n"
+                    "If you registered this device for sync, data already "
+                    "uploaded to the server is not covered by this button.",
+                    parent=self,
+                )
             except Exception as exc:
                 messagebox.showerror("Error", str(exc), parent=self)
 

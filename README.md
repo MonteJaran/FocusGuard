@@ -22,7 +22,8 @@ records. Nothing is monitored until you accept it.
 ## Layout
 
 ```
-core/       monitoring, storage, config, consent gate
+core/       monitoring, storage, config, consent gate,
+            protected-process denylist, staged app closing
 ui/         Tkinter tabs (files, processes, insights, devices, settings)
 server/     request/response models for the sync backend
 tests/      pytest suite — see tests/README.md
@@ -32,7 +33,7 @@ tests/      pytest suite — see tests/README.md
 
 ```bash
 python -m pip install pytest ruff
-python -m pytest          # 65 tests, none touch your real data
+python -m pytest          # 152 tests, none touch your real data
 python -m ruff check .    # lint
 ```
 
@@ -47,10 +48,14 @@ a byte-compile of the Tk modules, and a real install of `requirements.txt`.
 | [`ROADMAP.md`](ROADMAP.md) | Planned features and what each one is blocked on |
 | [`PRIVACY.md`](PRIVACY.md) | Privacy policy (draft — needs legal review) |
 
-## Two rules for contributors
+## Three rules for contributors
 
 1. **Never advertise a feature that does not exist.** Anything unbuilt goes in
    `_PLANNED_FEATURES` and renders under a "Planned" heading. The build fails
    if this slips.
 2. **Never put a real company's name in the ad slot.** `_ADS` stays empty until
    a real ad network is integrated. The build fails if this slips.
+3. **Never close an app without warning it first.** Go through
+   `core/procutil.close_app()`, which warns, posts `WM_CLOSE` so the app can
+   save, and only terminates what refuses. Never call `psutil.kill()` directly,
+   and never bypass `core/protected.py`.
