@@ -44,7 +44,16 @@ the Windows session.
 | ST-02 | *Partial* | `packaging/installer.iss` — per-user Inno Setup installer, stops a running instance before installing, removes the `Run` key on uninstall and offers to delete `%LOCALAPPDATA%\FocusGuard`. `packaging/build.ps1` runs tests and lint, generates the Windows version resource from `core/version.py`, builds, **smoke-tests that the frozen app stays running**, and signs with timestamping when a certificate is supplied. **Still needed:** an actual certificate, a first real Windows build, and an update mechanism |
 | ST-03 | **Fixed** | All three antivirus triggers removed from the launcher: no global pip, no downloading and executing an unverified `.exe`, no `-ExecutionPolicy Bypass`. Build is one-folder rather than one-file (one-file unpacks to `%TEMP%` on every launch) and UPX is off. Tests fail the build if any of them return |
 | SF-11 | **Fixed** | Indices were added earlier; retention now closes the other half. `retention_days` defaults to 365 (0 keeps everything), pruned on the daily rollover rather than at startup so launch stays fast, and exposed in Settings — `PRIVACY.md` says the user can change it there, so a test asserts the control exists |
+| SF-08 | *Partial* | The `plan = "premium"` override is gone and the editable `plan` key with it. `core/licensing.py` is now the single gate: entitlement is cached signed and machine-bound, so hand-editing `config.json` invalidates it rather than granting premium; a verified licence survives 14 days offline so a dropped connection never revokes a paying customer; and a server error leaves the cached entitlement alone. `_activate_license` is a real flow off the UI thread. **Still needed:** the `/license/verify` endpoint and a merchant of record — those are the only missing pieces now |
 | SF-14 | **Fixed** | Kill watcher is now joined on `stop()`; `_notified_limits` resets on date rollover so warnings resume after day one; the `sound` parameter that was accepted and ignored is gone, and the sound setting now actually plays |
+
+**On what client-side licensing can do** — this is desktop software, so a
+determined user can always patch the binary. `core/licensing.py` says so in its
+docstring rather than pretending otherwise, and splits the problem: the server
+is the authority for anything that costs money to provide (sync, hosted
+storage), gated at the point of use; the client cache is *tamper-evident*, not
+tamper-proof, which stops casual config editing — the realistic case — and
+claims nothing more.
 
 **New since the audit** — `core/updates.py` adds an update check, which the
 original review flagged as missing entirely: without one, a security fix can

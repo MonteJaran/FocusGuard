@@ -103,9 +103,10 @@ A commitment, not a feature.
 Premium cannot be sold at all until the monetization chain works. From
 `AUDIT.md`:
 
-- **SF-08** — `core/config.py` currently forces `plan = "premium"` on every
-  install; entitlement is client-side in an editable JSON file; there is no
-  payment integration and `_activate_license` is a stub
+- **SF-08** — mostly done. `core/licensing.py` holds the entitlement gate,
+  signed and machine-bound, with a 14-day offline grace period; activation is a
+  real flow. What remains is a `/license/verify` endpoint on the server and a
+  merchant of record to sell keys
 - **SF-09** — the sync API has no authentication
 - **ST-05** — the backend is not in version control
 

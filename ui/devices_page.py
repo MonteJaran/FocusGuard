@@ -8,11 +8,13 @@ Sections
 3. Your Plan     — freemium vs premium feature comparison + upgrade CTA
 """
 
-import tkinter as tk
-from tkinter import ttk, messagebox
-import threading
 import json
+import threading
+import tkinter as tk
 import webbrowser
+from tkinter import messagebox, ttk
+
+from core import licensing
 
 try:
     from urllib.request import urlopen, Request
@@ -256,7 +258,7 @@ class DevicesPage(ttk.Frame):
 
         dev_id     = self.config.get("device_id") or ""
         linked     = self.config.get("linked_devices") or []
-        max_dev    = 10 if self.config.get("plan") == "premium" else 2
+        max_dev    = 10 if licensing.is_premium(self.config) else 2
 
         # Header row
         hdr = tk.Frame(card, bg=BG2)
@@ -313,7 +315,7 @@ class DevicesPage(ttk.Frame):
                   cursor='hand2',
                   command=self._show_join_dialog).pack(side='left')
 
-        if at_limit and self.config.get("plan") != "premium":
+        if at_limit and not licensing.is_premium(self.config):
             tk.Label(card,
                      text=f"Device limit reached ({max_dev}). A higher limit is planned "
                           f"but not available yet.",
@@ -350,7 +352,7 @@ class DevicesPage(ttk.Frame):
     # ── Section: Plan ─────────────────────────────────────────────────────────
 
     def _build_plan(self, parent):
-        plan = self.config.get("plan") or "freemium"
+        premium = licensing.is_premium(self.config)
 
         outer = tk.Frame(parent, bg=BG)
         outer.pack(fill='x', padx=18, pady=(0, 6))
@@ -366,7 +368,7 @@ class DevicesPage(ttk.Frame):
         free_hdr.pack_propagate(False)
         tk.Label(free_hdr, text="Free", bg='#0f3460', fg=TEXT,
                  font=('Segoe UI', 14, 'bold')).pack(side='left', padx=14, pady=10)
-        if plan == "freemium":
+        if not premium:
             tk.Label(free_hdr, text="CURRENT", bg='#0f3460', fg=SUCCESS,
                      font=('Segoe UI', 9, 'bold')).pack(side='right', padx=10)
 
@@ -403,7 +405,7 @@ class DevicesPage(ttk.Frame):
 
         # Anything already shipping behind the paid tier.
         for feat in _PREMIUM_FEATURES:
-            _feature_row(prem_card, feat, unlocked=(plan == "premium"), bg=prem_bg)
+            _feature_row(prem_card, feat, unlocked=premium, bg=prem_bg)
 
         # Everything still to be built — dimmed and explicitly labelled.
         tk.Label(prem_card,
@@ -663,14 +665,30 @@ class DevicesPage(ttk.Frame):
         self._populate()
 
     def _activate_license(self):
+        """
+        Activate a licence key against the server.
+
+        Runs off the UI thread: this is a network call, and doing it inline
+        freezes the window for however long the server takes to answer.
+        """
         key = self._license_var.get().strip() if hasattr(self, '_license_var') else ""
         if not key:
+            messagebox.showinfo("Licence", "Enter your licence key first.",
+                                parent=self)
             return
-        # Placeholder — wire to your payment/license server
-        messagebox.showinfo("License",
-                            "License activation coming soon!\n\n"
-                            "Visit our website to purchase Premium.",
-                            parent=self)
+
+        def _work():
+            result = licensing.activate(self.config, key)
+            self.after(0, lambda r=result: _done(r))
+
+        def _done(result):
+            if result["ok"]:
+                messagebox.showinfo("Licence", result["message"], parent=self)
+                self._populate()          # redraw with the new entitlement
+            else:
+                messagebox.showwarning("Licence", result["message"], parent=self)
+
+        threading.Thread(target=_work, daemon=True).start()
 
     def _open_upgrade(self):
         webbrowser.open("https://focusguard.app/premium")

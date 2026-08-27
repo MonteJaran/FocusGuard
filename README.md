@@ -36,7 +36,7 @@ tests/      pytest suite — see tests/README.md
 
 ```bash
 python -m pip install pytest ruff
-python -m pytest          # 294 tests, none touch your real data
+python -m pytest          # 326 tests, none touch your real data
 python -m ruff check .    # lint
 ```
 

@@ -42,7 +42,10 @@ DEFAULT_CONFIG: dict = {
     # Device & plan
     "device_id": "",               # 24-char server-assigned ID
     "server_url": "https://api-tk3y3h4s3q-uc.a.run.app",  # Firebase Cloud Functions
-    "plan": "premium",             # "freemium" or "premium"
+    # Entitlement is NOT stored here as a plain value any more: that made it a
+    # one-word edit in a text file. It lives under "entitlement", signed, and
+    # is read through core/licensing.py. See AUDIT SF-08.
+    "entitlement": {},
     "linked_devices": [],          # [{id, name, last_seen}, ...]
     "server_app_ids": {},          # {local_db_id: server_id} mapping
 }
@@ -87,8 +90,6 @@ class Config:
             # Always keep server_url up to date with the latest deployed URL
             if not self._data.get("server_url"):
                 self._data["server_url"] = DEFAULT_CONFIG["server_url"]
-        # Always force premium so Pro features are available for testing
-        self._data["plan"] = "premium"
         self.save()
 
     @staticmethod

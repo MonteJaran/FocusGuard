@@ -9,7 +9,7 @@ from tkinter import messagebox
 # Ensure we can import our modules regardless of working directory
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from core import logging_setup, tray, updates
+from core import licensing, logging_setup, tray, updates
 from core.config import Config
 from core.consent import has_consented, record_consent, show_consent_dialog
 from core.database import Database
@@ -173,6 +173,13 @@ def main() -> None:
     root.deiconify()
     root.lift()
     root.focus_force()
+
+    # ── Licence refresh ───────────────────────────────────────────────────────
+    # Background: a renewed or revoked licence should be picked up without the
+    # user doing anything, but a slow server must never delay startup, and a
+    # failure leaves the cached entitlement untouched.
+    threading.Thread(target=lambda: licensing.refresh(config),
+                     daemon=True, name="FocusGuard-LicenceRefresh").start()
 
     # ── Update check ──────────────────────────────────────────────────────────
     # Background, and only after the window is up: a slow or unreachable host
