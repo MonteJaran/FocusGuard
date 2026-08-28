@@ -8,6 +8,7 @@ import sys
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from core import schedule
 from core.logging_setup import get_logger
 from core.version import __version__
 
@@ -74,6 +75,8 @@ class SettingsPage(ttk.Frame):
         self._build_notifications_section(inner)
         self._separator(inner)
         self._build_enforcement_section(inner)
+        self._separator(inner)
+        self._build_focus_hours_section(inner)
         self._separator(inner)
         self._build_startup_section(inner)
         self._separator(inner)
@@ -161,6 +164,115 @@ class SettingsPage(ttk.Frame):
                  bg=BG, fg=TEXT, font=('Segoe UI', 10)).pack(side='left')
 
     # ── Section: Enforcement ──────────────────────────────────────────────────
+
+    def _build_focus_hours_section(self, parent) -> None:
+        """
+        A recurring window where limits tighten.
+
+        One window, not a multi-block scheduler: that covers work hours, study
+        hours and evenings, and it ships complete. See core/schedule.py.
+        """
+        self._section_header(parent, "Focus Hours")
+
+        self._focus_enabled = tk.BooleanVar(
+            value=bool(self.config.get("focus_hours_enabled", False)))
+        ttk.Checkbutton(
+            parent, text="Tighten limits during set hours",
+            variable=self._focus_enabled,
+            command=lambda: self.config.set("focus_hours_enabled",
+                                            self._focus_enabled.get()),
+        ).pack(anchor='w', padx=32, pady=(0, 2))
+
+        tk.Label(parent,
+                 text="Only affects apps that already have a daily limit set.",
+                 bg=BG, fg=TEXT2, font=('Segoe UI', 9)).pack(
+            anchor='w', padx=52, pady=(0, 6))
+
+        # ── Days ──────────────────────────────────────────────────────────────
+        days_row = ttk.Frame(parent, style='TFrame')
+        days_row.pack(anchor='w', padx=32, pady=(0, 6))
+        tk.Label(days_row, text="Days:", bg=BG, fg=TEXT,
+                 font=('Segoe UI', 10)).pack(side='left', padx=(0, 8))
+
+        selected = set(self.config.get("focus_hours_days",
+                                       schedule.DEFAULT_DAYS) or [])
+        self._focus_days = {}
+
+        def _save_days() -> None:
+            chosen = sorted(i for i, var in self._focus_days.items()
+                            if var.get())
+            self.config.set("focus_hours_days", chosen)
+            _refresh_summary()
+
+        for index, name in enumerate(schedule.DAY_NAMES):
+            var = tk.BooleanVar(value=index in selected)
+            self._focus_days[index] = var
+            ttk.Checkbutton(days_row, text=name, variable=var,
+                            command=_save_days).pack(side='left', padx=(0, 4))
+
+        # ── Times and cap ─────────────────────────────────────────────────────
+        times_row = ttk.Frame(parent, style='TFrame')
+        times_row.pack(anchor='w', padx=32, pady=(0, 6))
+
+        self._focus_start = tk.StringVar(
+            value=self.config.get("focus_hours_start", schedule.DEFAULT_START))
+        self._focus_end = tk.StringVar(
+            value=self.config.get("focus_hours_end", schedule.DEFAULT_END))
+
+        def _save_times(*_a) -> None:
+            # Round-tripping through the parser rejects anything unparseable
+            # rather than storing it and confusing the monitor later.
+            for key, var, fallback in (
+                ("focus_hours_start", self._focus_start, schedule.DEFAULT_START),
+                ("focus_hours_end", self._focus_end, schedule.DEFAULT_END),
+            ):
+                parsed = schedule.parse_time(var.get(), fallback=None)
+                if parsed is None:
+                    var.set(self.config.get(key, fallback))
+                else:
+                    var.set(schedule.format_time(*parsed))
+                    self.config.set(key, var.get())
+            _refresh_summary()
+
+        tk.Label(times_row, text="From", bg=BG, fg=TEXT,
+                 font=('Segoe UI', 10)).pack(side='left')
+        start_box = ttk.Entry(times_row, textvariable=self._focus_start, width=7)
+        start_box.pack(side='left', padx=6)
+        tk.Label(times_row, text="to", bg=BG, fg=TEXT,
+                 font=('Segoe UI', 10)).pack(side='left')
+        end_box = ttk.Entry(times_row, textvariable=self._focus_end, width=7)
+        end_box.pack(side='left', padx=6)
+
+        for box in (start_box, end_box):
+            box.bind('<FocusOut>', _save_times)
+            box.bind('<Return>', _save_times)
+
+        tk.Label(times_row, text="   Cap limited apps at",
+                 bg=BG, fg=TEXT, font=('Segoe UI', 10)).pack(side='left')
+        self._focus_cap = tk.IntVar(
+            value=int(self.config.get("focus_hours_limit_min", 0) or 0))
+        ttk.Spinbox(
+            times_row, from_=0, to=1440, textvariable=self._focus_cap, width=6,
+            command=lambda: (self.config.set("focus_hours_limit_min",
+                                             self._focus_cap.get()),
+                             _refresh_summary()),
+        ).pack(side='left', padx=6)
+        tk.Label(times_row, text="min  (0 = blocked)", bg=BG, fg=TEXT2,
+                 font=('Segoe UI', 9)).pack(side='left')
+
+        # ── Live summary ──────────────────────────────────────────────────────
+        self._focus_summary = tk.StringVar()
+
+        def _refresh_summary() -> None:
+            try:
+                self._focus_summary.set(f"Schedule: {schedule.describe(self.config)}")
+            except Exception as exc:
+                log.debug("Could not describe the schedule: %s", exc)
+                self._focus_summary.set("")
+
+        _refresh_summary()
+        tk.Label(parent, textvariable=self._focus_summary, bg=BG, fg=TEXT2,
+                 font=('Segoe UI', 9)).pack(anchor='w', padx=32, pady=(0, 8))
 
     def _build_enforcement_section(self, parent) -> None:
         self._section_header(parent, "Limit Enforcement")

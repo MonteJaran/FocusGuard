@@ -82,13 +82,17 @@ Shared goals across a group of linked users.
   Needs its own consent step beyond the first-run gate, since it publishes one
   person's usage to others
 
-### 7. Scheduled focus blocks
-Time windows where limits tighten automatically — work hours, study sessions.
+### 7. Scheduled focus hours — SHIPPED
 
-- **Status:** not started
-- **Blocked on:** nothing
-- **Notes:** not previously advertised. Probably the highest value-per-effort
-  item on this list, and it works entirely locally
+- **Status:** done. `core/schedule.py` plus a Settings section. One recurring
+  window (days, start, end, cap) rather than a multi-block scheduler — that
+  covers work hours, study hours and evenings, and it ships complete.
+- **Semantics:** only affects apps that already have a daily limit, and can
+  only ever tighten, never loosen. A cap of 0 blocks outright.
+- **Note:** overnight windows (22:00–06:00) work, and the window belongs to the
+  day it started on, so a Friday-night block still applies at 01:00 Saturday.
+  That is the case a naive `start <= now <= end` gets wrong.
+- **Next:** multiple named blocks, if anyone asks for them. One window first.
 
 ### 8. Priority support
 A commitment, not a feature.

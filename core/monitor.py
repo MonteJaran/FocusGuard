@@ -15,7 +15,7 @@ except ImportError:
     psutil = None
     _PSUTIL_AVAILABLE = False
 
-from core import activity, procutil
+from core import activity, procutil, schedule
 from core.logging_setup import get_logger
 from core.protected import is_protected
 
@@ -219,8 +219,8 @@ class Monitor:
                 for app in apps:
                     if not app.get("enabled", 1):
                         continue
-                    daily_limit = app.get("daily_limit_min", 0) or 0
-                    if daily_limit <= 0:
+                    daily_limit = self._limit_for(app)
+                    if not self._limit_is_active(daily_limit):
                         continue
 
                     exe_name = (app.get("exe_name") or "").lower().strip()
@@ -236,7 +236,7 @@ class Monitor:
                     app_id = app["id"]
                     today_sec = self._usage_today_sec(app_id)
 
-                    if today_sec >= daily_limit * 60:
+                    if today_sec >= self._limit_seconds(daily_limit):
                         # Warns and starts a grace period on the first pass;
                         # only closes once that deadline has passed.
                         if not self._due_to_close(app_id, app["name"], daily_limit):
@@ -367,9 +367,10 @@ class Monitor:
                 self._log(f"  '{app['name']}': credited {credited}s "
                           f"(total {session['counted_sec']}s)")
 
-                daily_limit = app.get("daily_limit_min", 0)
-                if daily_limit and daily_limit > 0:
-                    self._check_limits(app_id, app["name"], exe_name, exe_path, daily_limit)
+                daily_limit = self._limit_for(app)
+                if self._limit_is_active(daily_limit):
+                    self._check_limits(app_id, app["name"], exe_name, exe_path,
+                                       daily_limit)
 
         # Save progress for all still-running sessions so data survives crashes
         with self._lock:
@@ -542,6 +543,31 @@ class Monitor:
                      removed, days)
         return removed
 
+    def _limit_for(self, app: dict) -> int:
+        """
+        The daily limit to enforce for this app right now, in minutes.
+
+        Goes through core/schedule.py so focus hours are applied in exactly one
+        place. Returns 0 for "no limit" and -1 for "not allowed at all", which
+        is what a focus window with a zero cap means.
+        """
+        try:
+            return schedule.effective_daily_limit(app, self.config)
+        except Exception as e:
+            log.error("Could not compute the limit for '%s': %s",
+                      app.get("name", "?"), e)
+            return int(app.get("daily_limit_min", 0) or 0)
+
+    @staticmethod
+    def _limit_is_active(limit: int) -> bool:
+        """A limit of 0 means unlimited; -1 means blocked outright."""
+        return limit != 0
+
+    @staticmethod
+    def _limit_seconds(limit: int) -> int:
+        """Seconds allowed for a limit value. -1 (blocked) allows nothing."""
+        return 0 if limit < 0 else limit * 60
+
     def _grace_seconds(self) -> int:
         """Warning period before an over-limit app is closed."""
         try:
@@ -646,11 +672,11 @@ class Monitor:
 
     def _is_over_daily_limit(self, app_id: int, app: dict) -> bool:
         """Return True if the app has already used up its daily limit."""
-        daily_limit_min = app.get("daily_limit_min", 0) or 0
-        if daily_limit_min <= 0:
+        daily_limit_min = self._limit_for(app)
+        if not self._limit_is_active(daily_limit_min):
             return False
         try:
-            return self._usage_today_sec(app_id) >= daily_limit_min * 60
+            return self._usage_today_sec(app_id) >= self._limit_seconds(daily_limit_min)
         except Exception as e:
             log.error("Could not read usage for app %s: %s", app_id, e)
             return False
@@ -661,9 +687,16 @@ class Monitor:
         try:
             today_sec = self._usage_today_sec(app_id)
 
-            limit_sec = daily_limit_min * 60
+            # -1 means "not allowed at all" (a focus window with a zero cap),
+            # which is over the limit the moment the app is open. Multiplying
+            # it out naively gives a negative limit and a 0% reading, so the
+            # app would never trigger.
+            limit_sec = self._limit_seconds(daily_limit_min)
             warn_pct  = self.config.get("warn_at_percent", 80)
-            usage_pct = (today_sec / limit_sec * 100) if limit_sec > 0 else 0
+            if limit_sec > 0:
+                usage_pct = today_sec / limit_sec * 100
+            else:
+                usage_pct = 100.0
 
             notify_key = f"{app_id}_{int(usage_pct // 10) * 10}"
 
@@ -706,7 +739,7 @@ class Monitor:
             elif usage_pct >= warn_pct and notify_key not in self._notified_limits:
                 self._notified_limits.add(notify_key)
                 if self.config.get("notifications_enabled", True):
-                    mins_remaining = max(0, (limit_sec - today_sec) // 60)
+                    mins_remaining = max(0, (limit_sec - today_sec) // 60)  # never negative
                     _send_notification(
                         "FocusGuard — Approaching Limit",
                         f"{app_name} — {int(usage_pct)}% of daily limit used. "

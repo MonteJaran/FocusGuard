@@ -36,7 +36,7 @@ tests/      pytest suite — see tests/README.md
 
 ```bash
 python -m pip install pytest ruff
-python -m pytest          # 326 tests, none touch your real data
+python -m pytest          # 366 tests, none touch your real data
 python -m ruff check .    # lint
 ```
 
@@ -47,6 +47,7 @@ a byte-compile of the Tk modules, and a real install of `requirements.txt`.
 
 | File | What it is |
 |---|---|
+| [`STATUS.md`](STATUS.md) | **What's left to do**, and what is blocked on you rather than on code |
 | [`AUDIT.md`](AUDIT.md) | Full readiness audit — legal, safety, and engineering findings with a phased plan |
 | [`ROADMAP.md`](ROADMAP.md) | Planned features and what each one is blocked on |
 | [`PRIVACY.md`](PRIVACY.md) | Privacy policy (draft — needs legal review) |

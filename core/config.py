@@ -29,6 +29,13 @@ DEFAULT_CONFIG: dict = {
     # Check for a newer version at startup. This is a network request, so it
     # is disclosed in PRIVACY.md and can be turned off.
     "check_for_updates": True,
+    # Focus hours: a recurring window where limits tighten. See core/schedule.py.
+    # Only affects apps that already have a daily limit set.
+    "focus_hours_enabled": False,
+    "focus_hours_days": [0, 1, 2, 3, 4],   # 0 = Monday
+    "focus_hours_start": "09:00",
+    "focus_hours_end": "17:00",
+    "focus_hours_limit_min": 0,            # 0 = blocked entirely while focusing
     # Delete usage history older than this many days. 0 keeps everything.
     # A year is far more than any view in the app shows, and it keeps the
     # database from growing for as long as FocusGuard stays installed.

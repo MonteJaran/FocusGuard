@@ -56,6 +56,7 @@ _FREE_FEATURES = [
     "CSV export",
     "All data stored locally on your PC",
     "Automatic cleanup of old history",
+    "Scheduled focus hours",
 ]
 
 # Shipping today, but only for Premium. Keep this empty until a paid tier
@@ -71,7 +72,6 @@ _PLANNED_FEATURES = [
     "Predictive distraction alerts",
     "PDF / Excel report export",
     "Team challenges & leaderboards",
-    "Scheduled focus blocks",
     "Priority support",
 ]
 
