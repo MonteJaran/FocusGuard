@@ -1,0 +1,31 @@
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Local agent / editor state
+.claude/
+.vscode/
+.idea/
+
+# Local data & secrets
+*.db
+*.sqlite
+*.log
+.env
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Build output
+build/
+dist/
+# Generated from core/version.py by packaging/make_version_info.py
+packaging/version_info.txt
+
+# Test & tooling caches
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/

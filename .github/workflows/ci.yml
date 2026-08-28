@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: python -m pip install --upgrade pip ruff
+
+      - name: Ruff
+        run: ruff check --output-format=github .
+
+  test:
+    name: Test (${{ matrix.os }} / py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is the shipping target; Linux runs the same suite because it
+        # is faster and catches anything that is accidentally platform-locked.
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+
+      - name: Run tests
+        run: python -m pytest -v
+
+  syntax:
+    name: Syntax check (all modules)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Byte-compile every module
+        # Catches syntax errors in the Tk UI modules, which the test suite does
+        # not import because CI runners have no display.
+        run: python -m compileall -q core ui server main.py
+
+  dependencies:
+    name: Dependency install
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install runtime dependencies
+        # requirements.txt is what users actually install. If it drifts from
+        # what the code imports, this job fails before a user hits it.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Import every runtime dependency
+        # pystray and Pillow were dropped in favour of core/tray.py (ctypes),
+        # so importing them here would now fail. Keep this list matching
+        # requirements.txt.
+        run: python -c "import psutil, plyer; print('runtime deps OK')"
+
+      - name: Verify the packaging config
+        # PyInstaller and Inno Setup cannot run here, but the spec, the
+        # installer script and the launcher can be checked for drift.
+        run: |
+          python -m pip install pytest
+          python -m pytest tests/test_packaging_build.py -v

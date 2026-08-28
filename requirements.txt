@@ -1,0 +1,4 @@
+# Runtime dependencies. Pinned with a lower bound only for now; pin
+# exactly with hashes before shipping a build (AUDIT ST-01).
+psutil>=5.9.0
+plyer>=2.1.0
